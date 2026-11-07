@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    name: Linux build, tests and headless renders
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (incl. software Vulkan driver)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libvulkan-dev glslc \
+            vulkan-validationlayers mesa-vulkan-drivers \
+            libx11-dev libxext-dev libwayland-dev libxkbcommon-dev
+      - name: Configure (debug + sanitizers)
+        run: cmake --preset linux-debug
+      - name: Build
+        run: cmake --build --preset linux-debug
+      - name: Unit tests
+        run: ./build/linux-debug/rk_tests
+      - name: Headless renders with validation
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          mkdir -p shots
+          for t in 0.27 0.42 0.72 0.02; do
+            ./build/linux-debug/bin/rakshas --headless --validate --time $t --out shots/rung1_t$t.png
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/
+
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vulkan SDK
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe" -OutFile vulkan-sdk.exe
+          Start-Process -Wait -FilePath .\vulkan-sdk.exe -ArgumentList "--root","C:\VulkanSDK","--accept-licenses","--default-answer","--confirm-command","install"
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Configure
+        run: cmake --preset windows -DRK_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build --preset windows-release
+      - name: Unit tests
+        run: ./build/windows/Release/rk_tests.exe
