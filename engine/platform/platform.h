@@ -17,6 +17,7 @@ struct InputState {
   bool resized = false;
   bool toggle_pause = false;   // P / gamepad Y (North): pause the sun
   bool screenshot = false;     // F12
+  bool toggle_camera_mode = false;  // C / right stick click: nudge vs fully directed zones
   float move_x = 0.0f;         // -1..1 right   (D/A, left stick X)
   float move_y = 0.0f;         // -1..1 forward (W/S, left stick Y)
   bool run = false;            // Shift / left bumper

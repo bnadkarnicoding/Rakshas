@@ -85,6 +85,43 @@ prop hill_stone_2
   yaw: 10
   color: 0.70 0.55 0.40
 
+# Placeholder people (figures) for the duel and conversation spots.
+prop duel_opponent
+  shape: figure
+  position: -24 14
+  yaw: 180
+  color: 0.30 0.32 0.40
+
+prop village_elder
+  shape: figure
+  position: 11 7
+  yaw: 120
+  color: 0.55 0.48 0.30
+
+# --- Camera zones ------------------------------------------------------------
+#
+# framing: explore, vista, duel or conversation. The camera glides into a
+# zone's framing as the player walks in, and back out as they leave.
+# focus: what the framing looks toward (the view, the opponent, the speaker).
+
+camera_zone ridge_top
+  framing: vista
+  center: 65 -52
+  radius: 18
+  focus: 0 0
+
+camera_zone duel_ground
+  framing: duel
+  center: -24 18
+  radius: 7
+  focus: -24 14
+
+camera_zone elder_talk
+  framing: conversation
+  center: 9 9
+  radius: 4.5
+  focus: 11 7
+
 # --- Where the player and view start --------------------------------------
 
 # facing is in degrees: 0 = north, 90 = west, -90 = east, 180 = south.

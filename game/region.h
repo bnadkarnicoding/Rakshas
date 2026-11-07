@@ -47,8 +47,11 @@ struct Terrain {
   Vec3 normal_at(float x, float z) const;
 };
 
+enum class PropShape { Box, Figure };
+
 struct PropPlacement {
   std::string name;
+  PropShape shape = PropShape::Box;  // Figure = an upright placeholder person (capsule)
   Vec2 position;        // x z on the ground
   Vec3 size{1, 1, 1};
   float yaw = 0.0f;     // degrees
@@ -62,6 +65,20 @@ struct CameraStart {
   float pitch = 20.0f;  // degrees above the horizon
 };
 
+// Camera framings a zone can ask for (see camera_director.h).
+enum class Framing { Explore, Vista, Duel, Conversation };
+const char* framing_name(Framing f);
+
+// A place in the world where the camera changes its framing.
+struct CameraZone {
+  std::string name;
+  Framing framing = Framing::Explore;
+  Vec2 center;
+  float radius = 10.0f;
+  bool has_focus = false;
+  Vec2 focus;  // what the framing looks toward: the view, the opponent, the other speaker
+};
+
 struct PlayerStart {
   Vec2 position;        // x z
   float facing = 0.0f;  // degrees; 0 faces north (-z), 90 faces west, -90 faces east
@@ -72,6 +89,7 @@ struct Region {
   std::vector<PropPlacement> props;
   CameraStart camera;
   PlayerStart player;
+  std::vector<CameraZone> camera_zones;
 };
 
 // Builds a Region from parsed content. Problems are added to `errors`.

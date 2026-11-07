@@ -5,9 +5,16 @@ A story-and-exploration game set in a pristine, mythic world stretching from Ind
 - **Design rules:** `CorePrinciples.md`, kept in the Rakshas Studio project.
 - **Engine design:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-## Current state: rung 3
+## Current state: rung 4
 
-You walk a placeholder character across a gray-box landscape (hills, a lookout ridge and a village clearing) loaded from a content file. The character follows the ground, can't pass through objects, and is followed by the camera. The sun and moon cast soft shadows, and the night sky has a moon and stars.
+You walk a placeholder character across a gray-box landscape (hills, a lookout ridge and a village clearing) loaded from a content file. The **hybrid camera** changes its framing as you move, gliding with no cuts and no shake:
+
+- **Explore:** follows behind you; you steer it.
+- **Vista:** at the top of the lookout ridge, it pulls back to show the valley.
+- **Duel:** near the dark figure west of the village, it goes tight over your shoulder.
+- **Conversation:** next to the elder in the village, it frames you both side-on.
+
+In a zone you can still nudge the view, and it drifts back when you let go. Press **C** to switch to "fully directed" (look input ignored in zones) and compare.
 
 ### Changing the land yourself
 
@@ -22,7 +29,8 @@ Open it in any text editor (Notepad works). You can:
 - change a number,
 - add a `hill`,
 - move a `prop`,
-- move the `player` start.
+- move the `player` start,
+- add or move a `camera_zone` (framing: `vista`, `duel` or `conversation`).
 
 Save, rebuild (`cmake --build --preset windows-release`), and run. If something in the file is wrong, the game tells you the line and suggests a fix, for example "did you mean 'position'?".
 
@@ -32,6 +40,7 @@ Save, rebuild (`cmake --build --preset windows-release`), and run. If something 
 | Run | Shift (hold) | Left bumper (hold) |
 | Look around | Arrow keys, or drag with the right mouse button | Right stick |
 | Camera closer / further | Mouse wheel, or Page Up / Page Down | D-pad up / down |
+| Camera zones: nudge / fully directed | C | Right stick click |
 | Scrub time of day | Q / E | Triggers |
 | Pause the sun | P | Y / Triangle |
 | Screenshot | F12 | (keyboard only) |

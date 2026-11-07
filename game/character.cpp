@@ -21,6 +21,11 @@ float wrap_angle(float a) {
 }  // namespace
 
 Obstacle obstacle_from_prop(const PropPlacement& prop) {
+  if (prop.shape == PropShape::Figure) {
+    // A person: treat as a small square slightly inside their round outline.
+    float r = prop.size.x * 0.5f * 0.85f;
+    return {prop.position, {r, r}, 0.0f};
+  }
   return {prop.position, {prop.size.x * 0.5f, prop.size.z * 0.5f}, radians(prop.yaw)};
 }
 

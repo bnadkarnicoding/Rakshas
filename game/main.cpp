@@ -30,6 +30,7 @@
 #include "render/rhi.h"
 #include "scene_constants.h"
 #include "screenshot.h"
+#include "camera_director.h"
 #include "character.h"
 #include "region.h"
 #include "shapes.h"
@@ -53,6 +54,7 @@ struct Options {
   float walk_seconds = 0.0f;   // headless: walk for this long before the picture
   Vec2 move{0.0f, 1.0f};       // headless: stick direction while walking (x right, y forward)
   bool run = false;
+  float settle_seconds = 2.5f; // headless: camera settling time after a walk
   std::string region;
   float day_length_seconds = 180.0f;
   std::string out = "rakshas_shot.png";
@@ -134,18 +136,6 @@ struct Prop {
   Vec3 color;
 };
 
-struct Camera {
-  Vec3 target{0.0f, 1.0f, 0.0f};
-  float yaw = 0.0f;       // radians
-  float pitch = 0.30f;    // radians above the horizon
-  float distance = 11.0f;
-
-  Vec3 eye() const {
-    float c = std::cos(pitch);
-    return target + Vec3{std::sin(yaw) * c, std::sin(pitch), std::cos(yaw) * c} * distance;
-  }
-};
-
 // Shadow coverage: a square this many metres wide around the view target.
 constexpr float kShadowRadius = 60.0f;
 
@@ -163,15 +153,15 @@ Mat4 light_matrix(Vec3 light_dir, Vec3 center, u32 shadow_size) {
   return translate({dx, dy, 0.0f}) * vp;
 }
 
-SceneConstants build_scene_constants(const Camera& cam, float aspect, float time_of_day,
+SceneConstants build_scene_constants(const CameraRig& cam, float aspect, float time_of_day,
                                      u32 shadow_size) {
   SkyState sky = evaluate_sky(time_of_day);
-  Mat4 view = look_at(cam.eye(), cam.target, Vec3{0, 1, 0});
-  Mat4 proj = perspective(radians(55.0f), aspect, 0.1f, 600.0f);
+  Mat4 view = look_at(cam.eye(), cam.look_at_point(), Vec3{0, 1, 0});
+  Mat4 proj = perspective(cam.fov, aspect, 0.1f, 600.0f);
   SceneConstants sc;
   sc.view_proj = proj * view;
   sc.inv_view_proj = inverse(sc.view_proj);
-  sc.light_view_proj = light_matrix(sky.light_dir, cam.target, shadow_size);
+  sc.light_view_proj = light_matrix(sky.light_dir, cam.focus, shadow_size);
   sc.camera_pos = to_vec4(cam.eye(), 1.0f);
   sc.light_dir = to_vec4(sky.light_dir);
   sc.light_color = to_vec4(sky.light_color);
@@ -203,7 +193,7 @@ void draw_props(rhi::Device& device, const std::vector<Prop>& props) {
 }
 
 void render_frame(rhi::Device& device, const Pipelines& pl, const std::vector<Prop>& props,
-                  const Camera& cam, float time_of_day) {
+                  const CameraRig& cam, float time_of_day) {
   u32 w = 0, h = 0;
   device.render_size(w, h);
   float aspect = static_cast<float>(w) / static_cast<float>(h);
@@ -224,30 +214,26 @@ void render_frame(rhi::Device& device, const Pipelines& pl, const std::vector<Pr
   device.end_pass();
 }
 
-constexpr float kCameraHeight = 1.5f;  // camera looks at the player's shoulders
 constexpr Vec3 kPlayerColor{0.62f, 0.33f, 0.22f};
 constexpr Vec3 kPlayerMarkerColor{0.85f, 0.78f, 0.62f};
 
 // Turns stick/WASD input (x right, y forward) into a world direction, relative
 // to where the camera is looking.
-Vec2 camera_relative(const Camera& cam, Vec2 input) {
-  Vec2 forward{-std::sin(cam.yaw), -std::cos(cam.yaw)};
-  Vec2 right{std::cos(cam.yaw), -std::sin(cam.yaw)};
+Vec2 camera_relative(float camera_yaw, Vec2 input) {
+  Vec2 forward{-std::sin(camera_yaw), -std::cos(camera_yaw)};
+  Vec2 right{std::cos(camera_yaw), -std::sin(camera_yaw)};
   return forward * input.y + right * input.x;
 }
 
-void keep_camera_above_ground(Camera& cam, const Terrain& terrain) {
-  Vec3 eye = cam.eye();
-  float min_pitch = std::asin(
-      clampf((terrain.height_at(eye.x, eye.z) + 0.4f - cam.target.y) / cam.distance, -1.0f, 1.0f));
-  if (cam.pitch < min_pitch) cam.pitch = min_pitch;
-}
-
-// The camera glides after the player rather than being rigidly attached.
-void follow_camera(Camera& cam, const Character& player, const Terrain& terrain, float dt) {
-  Vec3 want = player.position + Vec3{0, kCameraHeight, 0};
-  cam.target = lerp(cam.target, want, 1.0f - std::exp(-10.0f * dt));
-  keep_camera_above_ground(cam, terrain);
+// Model matrix for a placed prop: boxes rest on the ground (see prop_transform);
+// figures stand upright on the ground at their position.
+Mat4 placed_transform(const Terrain& terrain, const PropPlacement& p, const CharacterParams& body) {
+  if (p.shape == PropShape::Figure) {
+    Vec3 feet{p.position.x, terrain.height_at(p.position.x, p.position.y), p.position.y};
+    return translate(feet) * rotate_y(radians(p.yaw)) *
+           scale({p.size.x / (2.0f * body.radius), p.size.y / body.height, p.size.z / (2.0f * body.radius)});
+  }
+  return prop_transform(terrain, p);
 }
 
 bool load_pipeline(rhi::Device& device, const std::string& shader_dir, const char* name,
@@ -289,7 +275,7 @@ int main(int argc, char** argv) {
   desc.height = opt.height;
   desc.shadow_map_size = opt.low_preset ? 1024 : 2048;
   if (!opt.headless) {
-    window = Window::create({"Rakshas — rung 3", opt.width, opt.height});
+    window = Window::create({"Rakshas — rung 4", opt.width, opt.height});
     if (!window) return 1;
     desc.instance_extensions = window->vulkan_instance_extensions();
     desc.create_surface = [&](void* instance, u64* surface) {
@@ -326,7 +312,8 @@ int main(int argc, char** argv) {
   std::vector<Prop> scenery = {{&terrain, Mat4::identity(), region.terrain.color}};
   std::vector<Obstacle> obstacles;
   for (const PropPlacement& p : region.props) {
-    scenery.push_back({&box, prop_transform(region.terrain, p), p.color});
+    const GpuMesh* mesh = p.shape == PropShape::Figure ? &capsule : &box;
+    scenery.push_back({mesh, placed_transform(region.terrain, p, body), p.color});
     obstacles.push_back(obstacle_from_prop(p));
   }
 
@@ -336,14 +323,9 @@ int main(int argc, char** argv) {
                      region.player.position.y};
   player.facing = radians(region.player.facing);
 
-  Camera cam;
-  cam.yaw = radians(region.camera.yaw + region.player.facing);
-  // In headless runs, --yaw sets the picture's view after any scripted walk
-  // (so it doesn't change which way the walk goes).
-  if (!std::isnan(opt.yaw_degrees) && opt.walk_seconds <= 0.0f) cam.yaw = radians(opt.yaw_degrees);
-  cam.pitch = radians(std::isnan(opt.pitch_degrees) ? region.camera.pitch : opt.pitch_degrees);
-  cam.distance = std::isnan(opt.distance) ? region.camera.distance : opt.distance;
-  cam.target = player.position + Vec3{0, kCameraHeight, 0};
+  CameraDirector director;
+  director.reset(player, radians(region.camera.yaw + region.player.facing));
+  log_info("%zu camera zone(s) in this region", region.camera_zones.size());
   float time_of_day = opt.time_of_day;
   int exit_code = 0;
 
@@ -362,29 +344,51 @@ int main(int argc, char** argv) {
   // Fixed-rate simulation (ARCHITECTURE.md section 4).
   const float sim_dt = 1.0f / 60.0f;
   auto simulate = [&](Vec2 move_input, bool run) {
-    MoveIntent intent{camera_relative(cam, move_input), run};
+    MoveIntent intent{camera_relative(director.rig().yaw, move_input), run};
     step_character(player, body, region.terrain, obstacles, intent, sim_dt);
   };
 
+  CameraRig override_rig;
+  bool use_override = false;
   if (opt.headless) {
     // Optional scripted walk, e.g. --walk 3 --move "0 1" --run
+    // The walk direction is fixed relative to the starting view, so a scripted
+    // path doesn't wander when a camera zone turns the camera.
+    const float start_yaw = director.rig().yaw;
     int steps = static_cast<int>(opt.walk_seconds / sim_dt);
     for (int i = 0; i < steps; ++i) {
-      simulate(opt.move, opt.run);
-      follow_camera(cam, player, region.terrain, sim_dt);
+      step_character(player, body, region.terrain, obstacles,
+                     MoveIntent{camera_relative(start_yaw, opt.move), opt.run}, sim_dt);
+      director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
+    }
+    // Let the camera settle after walking, as a player standing still would see it.
+    int settle = steps > 0 ? static_cast<int>(opt.settle_seconds / sim_dt) : 0;
+    for (int i = 0; i < settle; ++i) {
+      simulate({0, 0}, false);
+      director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
     }
     if (steps > 0) {
       log_info("walked %.1f s, now at (%.2f, %.2f, %.2f)", static_cast<double>(opt.walk_seconds),
                static_cast<double>(player.position.x), static_cast<double>(player.position.y),
                static_cast<double>(player.position.z));
     }
-    if (!std::isnan(opt.yaw_degrees)) cam.yaw = radians(opt.yaw_degrees);
-    cam.target = player.position + Vec3{0, kCameraHeight, 0};
-    keep_camera_above_ground(cam, region.terrain);
+    if (steps > 0) {
+      log_info("camera framing: %s%s%s", framing_name(director.framing()),
+               director.zone_name().empty() ? "" : " in ", director.zone_name().c_str());
+    }
+    if (!std::isnan(opt.yaw_degrees) || !std::isnan(opt.pitch_degrees) || !std::isnan(opt.distance)) {
+      // Picture-only view override (debugging): starts from the current framing.
+      CameraRig rig = director.rig();
+      if (!std::isnan(opt.yaw_degrees)) rig.yaw = radians(opt.yaw_degrees);
+      if (!std::isnan(opt.pitch_degrees)) rig.pitch = radians(opt.pitch_degrees);
+      if (!std::isnan(opt.distance)) rig.distance = opt.distance;
+      override_rig = rig;
+      use_override = true;
+    }
     std::vector<Prop> props = frame_props();
     for (u32 i = 0; i < opt.frames; ++i) {
       if (!device->begin_frame()) continue;
-      render_frame(*device, pl, props, cam, time_of_day);
+      render_frame(*device, pl, props, use_override ? override_rig : director.rig(), time_of_day);
       device->end_frame();
     }
     std::vector<u8> pixels;
@@ -396,12 +400,14 @@ int main(int argc, char** argv) {
     }
   } else {
     log_info("controls: WASD move, Shift run, arrows or right-mouse drag look, wheel zoom,");
-    log_info("          Q/E time of day, P pause sun, F12 screenshot, Esc quit");
+    log_info("          C camera zone mode, Q/E time of day, P pause sun, F12 screenshot, Esc quit");
     InputState input;
     bool paused = false;
     int shot = 0;
     int last_reported_hour = -1;
     float accumulator = 0.0f;
+    Framing last_framing = Framing::Explore;
+    std::string last_zone;
     log_info("time of day %s, a full day lasts %.0f seconds", clock_text(time_of_day).c_str(),
              static_cast<double>(opt.day_length_seconds));
     f64 last = time_seconds();
@@ -427,11 +433,12 @@ int main(int argc, char** argv) {
         }
       }
 
-      // Look around: arrows / right stick / right-mouse drag. Turning right is -yaw.
-      cam.yaw -= input.look_x * dt * 2.2f + input.mouse_dx * 0.004f;
-      cam.pitch = clampf(cam.pitch - input.look_y * dt * 1.2f + input.mouse_dy * 0.004f,
-                         radians(-25.0f), radians(75.0f));
-      cam.distance = clampf(cam.distance * std::exp(input.zoom * dt * 1.2f), 2.5f, 30.0f);
+      if (input.toggle_camera_mode) {
+        director.directed_only = !director.directed_only;
+        log_info("camera zones: %s", director.directed_only
+                                         ? "fully directed (look input ignored inside zones)"
+                                         : "nudge (look around, view drifts back when you let go)");
+      }
 
       // Simulation runs in fixed steps, however fast or slow frames are.
       accumulator += dt;
@@ -439,10 +446,23 @@ int main(int argc, char** argv) {
         simulate({input.move_x, input.move_y}, input.run);
         accumulator -= sim_dt;
       }
-      follow_camera(cam, player, region.terrain, dt);
+
+      // The camera director: look input (arrows / right stick / right-mouse
+      // drag; turning right is -yaw) plus the framing of any zone we're in.
+      CameraInput look;
+      look.yaw = -(input.look_x * dt * 2.2f + input.mouse_dx * 0.004f);
+      look.pitch = -input.look_y * dt * 1.2f + input.mouse_dy * 0.004f;
+      look.zoom = input.zoom * dt * 1.2f;
+      director.update(player, region.terrain, region.camera_zones, look, dt);
+      if (director.framing() != last_framing || director.zone_name() != last_zone) {
+        last_framing = director.framing();
+        last_zone = director.zone_name();
+        log_info("camera: %s%s%s", framing_name(last_framing), last_zone.empty() ? "" : " (",
+                 last_zone.empty() ? "" : (last_zone + ")").c_str());
+      }
 
       if (!device->begin_frame()) continue;
-      render_frame(*device, pl, frame_props(), cam, time_of_day);
+      render_frame(*device, pl, frame_props(), director.rig(), time_of_day);
       device->end_frame();
 
       if (input.screenshot) {

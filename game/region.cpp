@@ -139,8 +139,19 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
     } else if (n.type == "prop") {
       PropPlacement p;
       p.name = n.name;
-      data::check_fields(n, {"position", "size", "yaw", "color"}, errors);
+      data::check_fields(n, {"position", "size", "yaw", "color", "shape"}, errors);
       read_vec2(n, "position", p.position, errors, true);
+      std::string shape = "box";
+      data::read_text(n, "shape", shape, errors);
+      if (shape == "figure") {
+        p.shape = PropShape::Figure;
+        p.size = {0.7f, 1.75f, 0.7f};
+      } else if (shape != "box") {
+        const data::Field* f = n.find("shape");
+        errors.add(n.file, f ? f->line : n.line,
+                   "'shape' can be 'box' or 'figure', not '" + shape + "'" +
+                       data::did_you_mean(shape, {"box", "figure"}));
+      }
       read_vec3(n, "size", p.size, errors, false);
       data::read_number(n, "yaw", p.yaw, errors);
       read_vec3(n, "color", p.color, errors, false);
@@ -149,6 +160,29 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
       data::check_fields(n, {"start", "facing"}, errors);
       read_vec2(n, "start", out.player.position, errors, false);
       data::read_number(n, "facing", out.player.facing, errors);
+    } else if (n.type == "camera_zone") {
+      CameraZone z;
+      z.name = n.name;
+      data::check_fields(n, {"framing", "center", "radius", "focus"}, errors);
+      std::string framing;
+      data::read_text(n, "framing", framing, errors, true);
+      if (framing == "vista") z.framing = Framing::Vista;
+      else if (framing == "duel") z.framing = Framing::Duel;
+      else if (framing == "conversation") z.framing = Framing::Conversation;
+      else if (framing == "explore") z.framing = Framing::Explore;
+      else if (!framing.empty()) {
+        const data::Field* f = n.find("framing");
+        errors.add(n.file, f ? f->line : n.line,
+                   "'framing' can be 'explore', 'vista', 'duel' or 'conversation', not '" + framing + "'" +
+                       data::did_you_mean(framing, {"explore", "vista", "duel", "conversation"}));
+      }
+      read_vec2(n, "center", z.center, errors, true);
+      data::read_number(n, "radius", z.radius, errors);
+      z.has_focus = n.find("focus") != nullptr;
+      read_vec2(n, "focus", z.focus, errors, false);
+      if ((z.framing == Framing::Duel || z.framing == Framing::Conversation) && !z.has_focus)
+        errors.add(n.file, n.line, "a '" + framing + "' zone needs a 'focus' (where the other person stands)");
+      out.camera_zones.push_back(z);
     } else if (n.type == "camera") {
       data::check_fields(n, {"target", "distance", "yaw", "pitch"}, errors);
       read_vec2(n, "target", out.camera.target, errors, false);
@@ -157,8 +191,9 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
       data::read_number(n, "pitch", out.camera.pitch, errors);
     } else {
       errors.add(n.file, n.line,
-                 "a region can contain 'terrain', 'prop', 'player' or 'camera', not '" + n.type + "'" +
-                     data::did_you_mean(n.type, {"terrain", "prop", "player", "camera"}));
+                 "a region can contain 'terrain', 'prop', 'player', 'camera' or 'camera_zone', not '" +
+                     n.type + "'" +
+                     data::did_you_mean(n.type, {"terrain", "prop", "player", "camera", "camera_zone"}));
     }
   }
   return errors.messages.size() == before;

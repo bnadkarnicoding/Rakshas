@@ -29,6 +29,7 @@ class SdlWindow final : public Window {
   void poll(InputState& input) override {
     input.toggle_pause = false;
     input.screenshot = false;
+    input.toggle_camera_mode = false;
     input.resized = false;
     input.mouse_dx = 0.0f;
     input.mouse_dy = 0.0f;
@@ -48,6 +49,7 @@ class SdlWindow final : public Window {
           if (e.key.key == SDLK_ESCAPE) input.quit = true;
           if (e.key.key == SDLK_P) input.toggle_pause = true;
           if (e.key.key == SDLK_F12) input.screenshot = true;
+          if (e.key.key == SDLK_C) input.toggle_camera_mode = true;
           break;
         case SDL_EVENT_MOUSE_MOTION:
           if (e.motion.state & SDL_BUTTON_RMASK) {
@@ -74,6 +76,7 @@ class SdlWindow final : public Window {
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
           if (e.gbutton.button == SDL_GAMEPAD_BUTTON_NORTH) input.toggle_pause = true;
           if (e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) input.quit = true;
+          if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK) input.toggle_camera_mode = true;
           break;
         default:
           break;
