@@ -11,7 +11,9 @@ terrain
   noise_height: 0.6
   noise_scale: 18
   seed: 7
-  color: 0.42 0.34 0.24
+  # The texture carries the colour; 'color' tints it (1 1 1 = as painted).
+  texture: earth.png
+  color: 1 1 1
 
   # The ridge players will climb to look over the valley (a "Vista" spot later).
   ridge lookout_ridge
@@ -43,31 +45,42 @@ prop stone_block
   position: 0 0
   size: 1.5 1.5 1.5
   yaw: 15
-  color: 0.55 0.50 0.45
+  texture: sandstone.png
+  color: 0.85 0.82 0.80
 
 prop sandstone_pillar
   position: -2.6 -1.6
   size: 0.7 3.5 0.7
   yaw: 20
-  color: 0.72 0.52 0.36
+  texture: sandstone.png
+  color: 1 1 1
 
 prop low_step
   position: 2.4 -0.9
   size: 2.6 0.5 1.6
   yaw: -10
-  color: 0.50 0.42 0.33
+  texture: sandstone.png
+  color: 0.9 0.88 0.85
 
+# Huts are 3D models (glTF, the format Blender exports). The doorway faces
+# the model's front; yaw turns it (here, toward the village centre).
 prop hut_a
+  shape: model
+  model: models/hut_round.gltf
   position: -8 -7
-  size: 3 2.4 3
-  yaw: 30
-  color: 0.62 0.55 0.44
+  yaw: 49
 
 prop hut_b
+  shape: model
+  model: models/hut_round.gltf
   position: 8 -6
-  size: 2.6 2.2 3.2
-  yaw: -20
-  color: 0.62 0.55 0.44
+  yaw: -53
+
+prop hut_c
+  shape: model
+  model: models/hut_round.gltf
+  position: -3 -14
+  yaw: 12
 
 prop ridge_marker
   position: 58 -42
@@ -84,6 +97,34 @@ prop hill_stone_2
   size: 1.2 6 1.2
   yaw: 10
   color: 0.70 0.55 0.40
+
+# --- Trees and grass ------------------------------------------------------
+# Placed automatically inside each area, keeping out of clearings, away from
+# objects and off steep ground. Change 'seed' for a different arrangement.
+
+forest north_woods
+  center: -35 -50
+  radius: 42
+  count: 70
+  seed: 3
+
+forest west_grove
+  center: -62 12
+  radius: 28
+  count: 35
+  seed: 11
+
+forest village_shade
+  center: 22 22
+  radius: 16
+  count: 10
+  seed: 5
+
+grass meadow
+  center: 0 0
+  radius: 55
+  density: 2
+  seed: 1
 
 # Placeholder people (figures) for the duel and conversation spots.
 prop duel_opponent

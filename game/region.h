@@ -39,6 +39,7 @@ struct Terrain {
   float noise_scale = 20.0f;    // metres between bumps
   int seed = 1;
   Vec3 color{0.42f, 0.34f, 0.24f};
+  std::string texture;          // image inside content/textures/ (tints by color)
   std::vector<Hill> hills;
   std::vector<Ridge> ridges;
   std::vector<Clearing> clearings;
@@ -47,11 +48,13 @@ struct Terrain {
   Vec3 normal_at(float x, float z) const;
 };
 
-enum class PropShape { Box, Figure };
+enum class PropShape { Box, Figure, Model };
 
 struct PropPlacement {
   std::string name;
-  PropShape shape = PropShape::Box;  // Figure = an upright placeholder person (capsule)
+  PropShape shape = PropShape::Box;  // Figure = placeholder person; Model = a glTF file
+  std::string model;                 // for Model: path inside content/, e.g. models/hut_round.gltf
+  std::string texture;               // for Box: image inside content/textures/, e.g. sandstone.png
   Vec2 position;        // x z on the ground
   Vec3 size{1, 1, 1};
   float yaw = 0.0f;     // degrees
@@ -84,12 +87,34 @@ struct PlayerStart {
   float facing = 0.0f;  // degrees; 0 faces north (-z), 90 faces west, -90 faces east
 };
 
+// An area planted with trees (placed automatically, avoiding clearings,
+// objects and steep ground).
+struct ForestArea {
+  std::string name;
+  Vec2 center;
+  float radius = 20.0f;
+  int count = 40;
+  int seed = 1;
+  float spacing = 3.5f;   // minimum metres between trunks
+};
+
+// An area covered with grass clumps.
+struct GrassArea {
+  std::string name;
+  Vec2 center;
+  float radius = 30.0f;
+  float density = 2.0f;   // clumps per square metre
+  int seed = 1;
+};
+
 struct Region {
   Terrain terrain;
   std::vector<PropPlacement> props;
   CameraStart camera;
   PlayerStart player;
   std::vector<CameraZone> camera_zones;
+  std::vector<ForestArea> forests;
+  std::vector<GrassArea> grasses;
 };
 
 // Builds a Region from parsed content. Problems are added to `errors`.

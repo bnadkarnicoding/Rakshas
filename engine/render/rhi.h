@@ -15,6 +15,10 @@
 //     white border = fully lit outside the map). If a frame skips the shadow
 //     pass, the map is cleared so nothing is shadowed. This is deliberately
 //     a single built-in shadow map; general render targets come later.
+//   * Textured pipelines read a material texture at set 1, binding 0
+//     (sampler2D, repeat, mipmapped), chosen with bind_texture().
+//   * Instanced draws (trees, grass) read per-instance data from a second
+//     vertex buffer (binding 1) set with bind_instance_buffer().
 //   * Rendering happens into an internal colour target (sRGB) + depth target.
 //     With a window it is copied to the screen; headless it can be read back.
 #pragma once
@@ -34,8 +38,21 @@ struct PipelineHandle {
   u32 id = 0;
   bool valid() const { return id != 0; }
 };
+struct TextureHandle {
+  u32 id = 0;
+  bool valid() const { return id != 0; }
+};
 
-enum class BufferUsage { Vertex, Index32 };
+enum class BufferUsage { Vertex, Index32, Instance };
+
+struct TextureDesc {
+  const char* debug_name = "texture";
+  u32 width = 0;
+  u32 height = 0;
+  const u8* rgba = nullptr;   // width * height * 4 bytes
+  bool srgb = true;           // colour images are sRGB; data maps (later) are not
+  bool mipmaps = true;        // smaller copies for distant surfaces (less shimmer)
+};
 
 enum class AttribFormat { Float2, Float3, Float4 };
 
@@ -54,6 +71,8 @@ struct PipelineDesc {
   std::vector<u32> fragment_spirv;           // may be empty for shadow pipelines
   u32 vertex_stride = 0;                     // 0 = no vertex buffer
   std::vector<VertexAttribute> attributes;
+  u32 instance_stride = 0;                   // > 0 = per-instance data at binding 1
+  std::vector<VertexAttribute> instance_attributes;
   bool depth_test = true;
   bool depth_write = true;
   bool cull_back_faces = true;               // counter-clockwise = front
@@ -83,6 +102,7 @@ class Device {
 
   virtual BufferHandle create_buffer(BufferUsage usage, const void* data, size_t bytes) = 0;
   virtual PipelineHandle create_pipeline(const PipelineDesc& desc) = 0;
+  virtual TextureHandle create_texture(const TextureDesc& desc) = 0;
 
   // Returns false when no frame should be drawn (e.g. window minimised).
   virtual bool begin_frame() = 0;
@@ -94,8 +114,11 @@ class Device {
   virtual void push_constants(const void* data, u32 bytes) = 0;
   virtual void bind_vertex_buffer(BufferHandle buffer) = 0;
   virtual void bind_index_buffer(BufferHandle buffer) = 0;
+  virtual void bind_instance_buffer(BufferHandle buffer) = 0;
+  virtual void bind_texture(TextureHandle texture) = 0;
   virtual void draw(u32 vertex_count) = 0;
   virtual void draw_indexed(u32 index_count) = 0;
+  virtual void draw_indexed_instanced(u32 index_count, u32 instance_count) = 0;
   virtual void end_pass() = 0;               // ends either kind of pass
   virtual void end_frame() = 0;
 

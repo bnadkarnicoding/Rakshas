@@ -57,7 +57,8 @@ bool read_vec3(const data::Node& n, const char* key, Vec3& out, data::Errors& e,
 }
 
 void read_terrain(const data::Node& n, Terrain& t, data::Errors& e) {
-  data::check_fields(n, {"size", "resolution", "noise_height", "noise_scale", "seed", "color"}, e);
+  data::check_fields(n, {"size", "resolution", "noise_height", "noise_scale", "seed", "color", "texture"}, e);
+  data::read_text(n, "texture", t.texture, e);
   data::read_number(n, "size", t.size, e);
   float res = static_cast<float>(t.resolution), seed = static_cast<float>(t.seed);
   data::read_number(n, "resolution", res, e);
@@ -139,18 +140,24 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
     } else if (n.type == "prop") {
       PropPlacement p;
       p.name = n.name;
-      data::check_fields(n, {"position", "size", "yaw", "color", "shape"}, errors);
+      data::check_fields(n, {"position", "size", "yaw", "color", "shape", "model", "texture"}, errors);
+      data::read_text(n, "texture", p.texture, errors);
       read_vec2(n, "position", p.position, errors, true);
       std::string shape = "box";
       data::read_text(n, "shape", shape, errors);
       if (shape == "figure") {
         p.shape = PropShape::Figure;
         p.size = {0.7f, 1.75f, 0.7f};
+      } else if (shape == "model") {
+        p.shape = PropShape::Model;
+        p.size = {3.6f, 3.0f, 3.6f};  // collision footprint; override with 'size'
+        data::read_text(n, "model", p.model, errors, true);
+        p.color = {1, 1, 1};
       } else if (shape != "box") {
         const data::Field* f = n.find("shape");
         errors.add(n.file, f ? f->line : n.line,
-                   "'shape' can be 'box' or 'figure', not '" + shape + "'" +
-                       data::did_you_mean(shape, {"box", "figure"}));
+                   "'shape' can be 'box', 'figure' or 'model', not '" + shape + "'" +
+                       data::did_you_mean(shape, {"box", "figure", "model"}));
       }
       read_vec3(n, "size", p.size, errors, false);
       data::read_number(n, "yaw", p.yaw, errors);
@@ -160,6 +167,31 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
       data::check_fields(n, {"start", "facing"}, errors);
       read_vec2(n, "start", out.player.position, errors, false);
       data::read_number(n, "facing", out.player.facing, errors);
+    } else if (n.type == "forest") {
+      ForestArea f;
+      f.name = n.name;
+      data::check_fields(n, {"center", "radius", "count", "seed", "spacing"}, errors);
+      read_vec2(n, "center", f.center, errors, true);
+      data::read_number(n, "radius", f.radius, errors);
+      float count = static_cast<float>(f.count), seed = static_cast<float>(f.seed);
+      data::read_number(n, "count", count, errors);
+      data::read_number(n, "seed", seed, errors);
+      f.count = std::clamp(static_cast<int>(count), 0, 5000);
+      f.seed = static_cast<int>(seed);
+      data::read_number(n, "spacing", f.spacing, errors);
+      out.forests.push_back(f);
+    } else if (n.type == "grass") {
+      GrassArea g;
+      g.name = n.name;
+      data::check_fields(n, {"center", "radius", "density", "seed"}, errors);
+      read_vec2(n, "center", g.center, errors, true);
+      data::read_number(n, "radius", g.radius, errors);
+      data::read_number(n, "density", g.density, errors);
+      float seed = static_cast<float>(g.seed);
+      data::read_number(n, "seed", seed, errors);
+      g.seed = static_cast<int>(seed);
+      g.density = std::clamp(g.density, 0.0f, 20.0f);
+      out.grasses.push_back(g);
     } else if (n.type == "camera_zone") {
       CameraZone z;
       z.name = n.name;
@@ -191,9 +223,10 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
       data::read_number(n, "pitch", out.camera.pitch, errors);
     } else {
       errors.add(n.file, n.line,
-                 "a region can contain 'terrain', 'prop', 'player', 'camera' or 'camera_zone', not '" +
-                     n.type + "'" +
-                     data::did_you_mean(n.type, {"terrain", "prop", "player", "camera", "camera_zone"}));
+                 "a region can contain 'terrain', 'prop', 'player', 'camera', 'camera_zone', "
+                 "'forest' or 'grass', not '" + n.type + "'" +
+                     data::did_you_mean(n.type, {"terrain", "prop", "player", "camera", "camera_zone",
+                                                 "forest", "grass"}));
     }
   }
   return errors.messages.size() == before;
@@ -215,7 +248,7 @@ Mesh build_terrain_mesh(const Terrain& t) {
     for (int i = 0; i < n; ++i) {
       float x = origin + static_cast<float>(i) * step;
       float z = origin + static_cast<float>(j) * step;
-      m.vertices.push_back({{x, t.height_at(x, z), z}, t.normal_at(x, z)});
+      m.vertices.push_back({{x, t.height_at(x, z), z}, t.normal_at(x, z), {x * 0.25f, z * 0.25f}});
     }
   }
   m.indices.reserve(static_cast<size_t>(n - 1) * static_cast<size_t>(n - 1) * 6);

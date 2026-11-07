@@ -1,6 +1,7 @@
 build/
-*.png
-!docs/**/*.png
+shots/
+screenshot_*.png
+rakshas_shot.png
 .vs/
 .vscode/
 CMakeUserPresets.json

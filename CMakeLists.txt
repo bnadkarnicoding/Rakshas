@@ -72,7 +72,8 @@ target_link_libraries(rk_render PUBLIC rk_core PRIVATE Vulkan::Vulkan)
 set(RK_SHADERS
   shaders/sky.vert shaders/sky.frag
   shaders/lit.vert shaders/lit.frag
-  shaders/shadow.vert)
+  shaders/shadow.vert
+  shaders/foliage.vert shaders/foliage.frag shaders/shadow_foliage.vert)
 set(RK_SHADER_OUT "${CMAKE_BINARY_DIR}/bin/shaders")
 set(RK_SPV_FILES "")
 foreach(src ${RK_SHADERS})
@@ -84,6 +85,7 @@ foreach(src ${RK_SHADERS})
     COMMAND Vulkan::glslc --target-env=vulkan1.3 -I ${CMAKE_SOURCE_DIR}/shaders
             -o ${out} ${CMAKE_SOURCE_DIR}/${src}
     DEPENDS ${CMAKE_SOURCE_DIR}/${src} ${CMAKE_SOURCE_DIR}/shaders/common.glsl
+            ${CMAKE_SOURCE_DIR}/shaders/lighting.glsl ${CMAKE_SOURCE_DIR}/shaders/foliage.glsl
     COMMENT "Compiling shader ${name}")
   list(APPEND RK_SPV_FILES ${out})
 endforeach()
@@ -98,6 +100,8 @@ add_executable(rakshas
   game/region.cpp
   game/character.cpp
   game/camera_director.cpp
+  game/model.cpp
+  game/foliage.cpp
   game/sky_model.cpp
   game/screenshot.cpp)
 target_include_directories(rakshas PRIVATE game third_party)
@@ -118,10 +122,11 @@ set_target_properties(rakshas PROPERTIES
 # ---------------------------------------------------------------------------
 if(RK_BUILD_TESTS)
   enable_testing()
-  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp tests/test_character.cpp tests/test_camera.cpp
-    game/sky_model.cpp game/shapes.cpp game/region.cpp game/character.cpp game/camera_director.cpp)
+  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp tests/test_character.cpp tests/test_camera.cpp tests/test_model.cpp tests/test_foliage.cpp
+    game/sky_model.cpp game/shapes.cpp game/region.cpp game/character.cpp game/camera_director.cpp
+    game/model.cpp game/foliage.cpp)
   target_compile_definitions(rk_tests PRIVATE RK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-  target_include_directories(rk_tests PRIVATE game tests)
+  target_include_directories(rk_tests PRIVATE game tests third_party)
   target_link_libraries(rk_tests PRIVATE rk_core)
   add_test(NAME unit_tests COMMAND rk_tests)
 endif()

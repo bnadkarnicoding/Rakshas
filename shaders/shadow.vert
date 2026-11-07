@@ -5,6 +5,7 @@
 layout(push_constant) uniform Object {
   mat4 model;
   vec4 base_color;
+  vec4 params;
 } object;
 
 layout(location = 0) in vec3 in_position;

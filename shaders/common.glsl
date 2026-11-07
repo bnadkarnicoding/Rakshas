@@ -13,7 +13,7 @@ layout(set = 0, binding = 0, std140) uniform SceneConstants {
   vec4 sky_zenith;       // rgb: sky colour straight up
   vec4 sky_horizon;      // rgb: sky colour at the horizon (also used for haze)
   vec4 ground_color;     // rgb: light bounced up from the ground
-  vec4 params;           // x: haze density, y: exposure
+  vec4 params;           // x: haze density, y: exposure, z: time (seconds)
   vec4 shadow_params;    // x: 1 / shadow map size, y: normal offset (m), z: shadow strength
 } scene;
 

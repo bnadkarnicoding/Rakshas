@@ -145,6 +145,7 @@ C++ allows memory bugs, so every build is checked automatically:
 | **2** ✓ | A gray-box landscape from a content file. Sun and moon shadows. A moon and stars. | core/data (content reader), region, render (shadow pass) |
 | **3** ✓ | A capsule walks and runs, follows the ground and collides with objects. The camera follows. | game/character (fixed 60 Hz step), input |
 | **4** ✓ | The hybrid camera: Explore, Vista, Duel and Conversation framings from camera zones in the region file. It glides with no cuts and no shake, and turns at most 60°/s. Nudge-and-return or fully directed (C). | game/camera_director |
+| **4b** ✓ | Detail preview: textures with mipmaps, glTF models, instanced trees and grass with wind, all placeholder art | render (textures, instancing), game/model (cgltf, stb_image), game/foliage |
 | 5 | An animated mannequin | anim, asset converter |
 | 6 | Footsteps, wind and silence | audio |
 | 7 | Editor overlay: place objects and camera zones | tools (Dear ImGui) |
