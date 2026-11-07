@@ -5,6 +5,7 @@
 // Windowed controls:
 //   A/D or Left/Right (left stick X) ... orbit the view
 //   W/S or Up/Down    (left stick Y) ... move closer / further
+//   R/F               (right stick)  ... tilt the view up / down
 //   Q/E               (triggers)     ... scrub the time of day
 //   Space             (South button) ... pause / resume the sun
 //   F12                              ... save a screenshot next to the executable
@@ -309,7 +310,7 @@ int main(int argc, char** argv) {
       log_info("wrote %s (%ux%u) on %s", opt.out.c_str(), w, h, device->device_name());
     }
   } else {
-    log_info("controls: A/D orbit, W/S zoom, Q/E time of day, Space pause sun, F12 screenshot, Esc quit");
+    log_info("controls: A/D orbit, W/S zoom, R/F tilt, Q/E time of day, Space pause sun, F12 screenshot, Esc quit");
     InputState input;
     bool paused = false;
     int shot = 0;
@@ -340,6 +341,13 @@ int main(int argc, char** argv) {
       }
       cam.yaw += input.orbit * dt * 1.2f;
       cam.distance = clampf(cam.distance * std::exp(input.zoom * dt * 1.2f), 4.0f, 60.0f);
+      // Tilting "up" lowers the camera so it looks up at the sky; it never
+      // goes below the ground.
+      cam.pitch = clampf(cam.pitch - input.tilt * dt * 0.9f, radians(-25.0f), radians(80.0f));
+      float min_pitch = std::asin(clampf(
+          (region.terrain.height_at(cam.eye().x, cam.eye().z) + 0.6f - cam.target.y) / cam.distance,
+          -1.0f, 1.0f));
+      if (cam.pitch < min_pitch) cam.pitch = min_pitch;
 
       if (!device->begin_frame()) continue;
       render_frame(*device, pl, props, cam, time_of_day);

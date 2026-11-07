@@ -27,8 +27,9 @@ Save, rebuild (`cmake --build --preset windows-release`), and run. If something 
 
 | Control | Keyboard | Gamepad |
 |---|---|---|
-| Orbit the view | A / D or ← / → | Left stick ↔ |
+| Orbit the view | A / D or ← / → | Left stick ↔ or right stick ↔ |
 | Closer / further | W / S or ↑ / ↓ | Left stick ↕ |
+| Tilt up / down | R / F | Right stick ↕ |
 | Scrub time of day | Q / E | Triggers |
 | Pause the sun | Space | A / Cross (South) |
 | Screenshot | F12 | — |

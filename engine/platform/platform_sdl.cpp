@@ -70,23 +70,28 @@ class SdlWindow final : public Window {
 
     const bool* keys = SDL_GetKeyboardState(nullptr);
     auto key = [&](SDL_Scancode a, SDL_Scancode b) { return keys[a] || keys[b]; };
-    float orbit = 0.0f, zoom = 0.0f, scrub = 0.0f;
+    float orbit = 0.0f, zoom = 0.0f, scrub = 0.0f, tilt = 0.0f;
     if (key(SDL_SCANCODE_A, SDL_SCANCODE_LEFT)) orbit -= 1.0f;
     if (key(SDL_SCANCODE_D, SDL_SCANCODE_RIGHT)) orbit += 1.0f;
     if (key(SDL_SCANCODE_W, SDL_SCANCODE_UP)) zoom -= 1.0f;
     if (key(SDL_SCANCODE_S, SDL_SCANCODE_DOWN)) zoom += 1.0f;
+    if (keys[SDL_SCANCODE_R]) tilt += 1.0f;
+    if (keys[SDL_SCANCODE_F]) tilt -= 1.0f;
     if (keys[SDL_SCANCODE_Q]) scrub -= 1.0f;
     if (keys[SDL_SCANCODE_E]) scrub += 1.0f;
 
     if (gamepad_) {
       orbit += axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFTX);
       zoom += axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFTY);
+      orbit += axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHTX);
+      tilt -= axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHTY);
       scrub += axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) -
                axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
     }
     input.orbit = clampf(orbit, -1.0f, 1.0f);
     input.zoom = clampf(zoom, -1.0f, 1.0f);
     input.time_scrub = clampf(scrub, -1.0f, 1.0f);
+    input.tilt = clampf(tilt, -1.0f, 1.0f);
   }
 
   void drawable_size(u32& width, u32& height) const override {

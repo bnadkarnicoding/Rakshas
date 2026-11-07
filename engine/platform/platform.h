@@ -19,6 +19,7 @@ struct InputState {
   bool screenshot = false;     // F12
   float orbit = 0.0f;          // -1..1  (A/D, Left/Right, left stick X)
   float zoom = 0.0f;           // -1..1  (W/S, Up/Down, left stick Y)
+  float tilt = 0.0f;           // -1..1  (R/F, right stick Y): + looks up
   float time_scrub = 0.0f;     // -1..1  (Q/E, triggers)
 };
 
