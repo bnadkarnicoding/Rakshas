@@ -375,9 +375,13 @@ bool VulkanDevice::pick_gpu() {
   vkEnumeratePhysicalDevices(instance_, &count, gpus.data());
 
   int best_score = -1;
+  std::string found_report;
   for (VkPhysicalDevice gpu : gpus) {
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(gpu, &props);
+    found_report += std::string("\n  - ") + props.deviceName + " (Vulkan " +
+                    std::to_string(VK_API_VERSION_MAJOR(props.apiVersion)) + "." +
+                    std::to_string(VK_API_VERSION_MINOR(props.apiVersion)) + ")";
     if (props.apiVersion < VK_API_VERSION_1_3) continue;
 
     VkPhysicalDeviceVulkan13Features f13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
@@ -415,7 +419,12 @@ bool VulkanDevice::pick_gpu() {
     }
   }
   if (!gpu_) {
-    log_error("no suitable Vulkan 1.3 GPU found (needs dynamic rendering + synchronization2)");
+    log_error(
+        "No graphics card with Vulkan 1.3 support was found.\n"
+        "Graphics found:%s\n"
+        "Please update your graphics driver (AMD: amd.com/support, NVIDIA: nvidia.com/drivers,\n"
+        "Intel: intel.com/support) and try again.",
+        found_report.empty() ? "\n  (none)" : found_report.c_str());
     return false;
   }
   return true;
@@ -581,7 +590,6 @@ u32 VulkanDevice::find_memory_type(u32 type_bits, VkMemoryPropertyFlags props) c
     if ((type_bits & (1u << i)) && (mem.memoryTypes[i].propertyFlags & props) == props) return i;
   }
   RK_FATAL("no suitable Vulkan memory type");
-  return 0;
 }
 
 Buffer VulkanDevice::make_buffer(VkDeviceSize size, VkBufferUsageFlags usage,

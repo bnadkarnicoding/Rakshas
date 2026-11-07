@@ -11,6 +11,8 @@
 //
 // Headless (used by automated tests and the cloud workspace):
 //   rakshas --headless --validate --time 0.3 --yaw 35 --out shot.png
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -74,6 +76,16 @@ bool parse_args(int argc, char** argv, Options& o) {
     return false;
   }
   return true;
+}
+
+float wrap01(float t) { return t - std::floor(t); }
+
+// "06:45"-style text for a time of day in 0..1.
+std::string clock_text(float time_of_day) {
+  int minutes = static_cast<int>(wrap01(time_of_day) * 24.0f * 60.0f) % (24 * 60);
+  char buf[8];
+  std::snprintf(buf, sizeof(buf), "%02d:%02d", minutes / 60, minutes % 60);
+  return buf;
 }
 
 struct GpuMesh {
@@ -244,6 +256,9 @@ int main(int argc, char** argv) {
     InputState input;
     bool paused = false;
     int shot = 0;
+    int last_reported_hour = -1;
+    log_info("time of day %s, a full day lasts %.0f seconds", clock_text(time_of_day).c_str(),
+             static_cast<double>(opt.day_length_seconds));
     f64 last = time_seconds();
     while (!input.quit) {
       window->poll(input);
@@ -252,9 +267,20 @@ int main(int argc, char** argv) {
       last = now;
       if (dt > 0.1f) dt = 0.1f;
 
-      if (input.toggle_pause) paused = !paused;
+      if (input.toggle_pause) {
+        paused = !paused;
+        log_info("sun %s at %s", paused ? "paused" : "moving again", clock_text(time_of_day).c_str());
+      }
       if (!paused) time_of_day += dt / opt.day_length_seconds;
-      time_of_day += input.time_scrub * dt * 0.08f;
+      // Holding Q/E sweeps a full day in about four seconds.
+      time_of_day += input.time_scrub * dt * 0.25f;
+      if (input.time_scrub != 0.0f) {
+        int hour = static_cast<int>(std::floor(wrap01(time_of_day) * 24.0f));
+        if (hour != last_reported_hour) {
+          last_reported_hour = hour;
+          log_info("time of day %s", clock_text(time_of_day).c_str());
+        }
+      }
       cam.yaw += input.orbit * dt * 1.2f;
       cam.distance = clampf(cam.distance * std::exp(input.zoom * dt * 1.2f), 4.0f, 40.0f);
 
