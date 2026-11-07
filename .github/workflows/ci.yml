@@ -34,6 +34,7 @@ jobs:
           ./build/linux-debug/bin/rakshas --headless --validate --time 0.66 --walk 18.3 --move "0.71 0.70" --run --out shots/camera_vista.png
           ./build/linux-debug/bin/rakshas --headless --validate --time 0.4 --walk 5.1 --move "-0.97 -0.24" --run --out shots/camera_duel.png
           ./build/linux-debug/bin/rakshas --headless --validate --time 0.4 --walk 4.6 --move "0.95 0.32" --out shots/camera_conversation.png
+          ./build/linux-debug/bin/rakshas --headless --validate --time 0.4 --walk 14 --move "-0.45 1" --listen 4 --audio-out shots/sound_village_to_woods.wav --out shots/sound_walk.png
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots

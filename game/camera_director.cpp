@@ -94,6 +94,7 @@ void CameraDirector::update(const Character& player, const Terrain& terrain,
     }
   }
   weight_ = w;
+  zone_framing_ = zone ? zone->framing : Framing::Explore;
   framing_ = (zone && w > 0.5f) ? zone->framing : Framing::Explore;
   zone_name_ = (zone && w > 0.5f) ? zone->name : std::string();
 

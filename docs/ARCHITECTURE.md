@@ -147,7 +147,7 @@ C++ allows memory bugs, so every build is checked automatically:
 | **4** ✓ | The hybrid camera: Explore, Vista, Duel and Conversation framings from camera zones in the region file. It glides with no cuts and no shake, and turns at most 60°/s. Nudge-and-return or fully directed (C). | game/camera_director |
 | **4b** ✓ | Detail preview: textures with mipmaps, glTF models, instanced trees and grass with wind, all placeholder art | render (textures, instancing), game/model (cgltf, stb_image), game/foliage |
 | **5** ✓ | An animated mannequin: glTF skeleton and clips, idle/walk/run blended by speed with stride sync, CPU skinning into per-frame dynamic buffers (GPU skinning when crowds arrive) | game/animation (moves to engine/anim when stable), RHI dynamic buffers |
-| 6 | Footsteps, wind and silence | audio |
+| **6** ✓ | Sound: our own mixer (smoothed volume and pan, loops, one-shots, limiter) on miniaudio output and decoding; footsteps in time with the stride; wind, leaves, birds and insects by place and time; stillness before a duel; offline WAV recording | engine/audio, game/soundscape |
 | 7 | Editor overlay: place objects and camera zones | tools (Dear ImGui) |
 | 8 | Rain, mud, heat. Saving and loading. | weather, save |
 

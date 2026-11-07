@@ -34,6 +34,8 @@
 #include "screenshot.h"
 #include "camera_director.h"
 #include "animation.h"
+#include "audio/audio.h"
+#include "soundscape.h"
 #include "foliage.h"
 #include "model.h"
 #include "character.h"
@@ -60,6 +62,9 @@ struct Options {
   Vec2 move{0.0f, 1.0f};       // headless: stick direction while walking (x right, y forward)
   bool run = false;
   float settle_seconds = 2.5f; // headless: camera settling time after a walk
+  float listen_seconds = 0.0f; // headless: extra seconds standing still (for audio recordings)
+  std::string audio_out;       // headless: record the sound to this WAV file
+  bool mute = false;
   std::string region;
   float day_length_seconds = 180.0f;
   std::string out = "rakshas_shot.png";
@@ -95,6 +100,9 @@ bool parse_args(int argc, char** argv, Options& o) {
     }
     else if (a == "--run") o.run = true;
     else if (a == "--settle" && (v = next("--settle"))) o.settle_seconds = std::strtof(v, nullptr);
+    else if (a == "--listen" && (v = next("--listen"))) o.listen_seconds = std::strtof(v, nullptr);
+    else if (a == "--audio-out" && (v = next("--audio-out"))) o.audio_out = v;
+    else if (a == "--mute") o.mute = true;
     else if (a == "--day-length" && (v = next("--day-length"))) o.day_length_seconds = std::strtof(v, nullptr);
     else if (a == "--out" && (v = next("--out"))) o.out = v;
     else {
@@ -365,7 +373,7 @@ int main(int argc, char** argv) {
   desc.height = opt.height;
   desc.shadow_map_size = opt.low_preset ? 1024 : 2048;
   if (!opt.headless) {
-    window = Window::create({"Rakshas — rung 5", opt.width, opt.height});
+    window = Window::create({"Rakshas — rung 6", opt.width, opt.height});
     if (!window) return 1;
     desc.instance_extensions = window->vulkan_instance_extensions();
     desc.create_surface = [&](void* instance, u64* surface) {
@@ -549,6 +557,44 @@ int main(int argc, char** argv) {
   float time_of_day = opt.time_of_day;
   int exit_code = 0;
 
+  // Sound: our mixer, fed by the soundscape rules; miniaudio sends it to the
+  // speakers in the windowed game. Headless runs can record it to a WAV file.
+  audio::Mixer mixer;
+  constexpr float kMasterVolume = 1.5f;
+  mixer.set_master(kMasterVolume);
+  Soundscape soundscape;
+  soundscape.load(mixer, content_dir + "sounds/");
+  auto sound_inputs = [&]() {
+    SoundscapeInputs in;
+    SkyState sky = evaluate_sky(time_of_day);
+    in.sun_elevation = sky.sun_elevation;
+    in.night = sky.night;
+    Vec2 here{player.position.x, player.position.z};
+    int near = 0;
+    for (const TreePlacement& t : trees) near += length(t.position - here) < 12.0f ? 1 : 0;
+    in.tree_density = clampf(static_cast<float>(near) / 6.0f, 0.0f, 1.0f);
+    in.height = player.position.y;
+    for (const Clearing& c : region.terrain.clearings)
+      if (length(here - c.center) < c.radius) in.on_bare_ground = true;
+    in.duel = director.zone_framing() == Framing::Duel ? director.zone_strength() : 0.0f;
+    if (player_figure) {
+      in.stride_phase = player_figure->animator.phase();
+      in.move_blend = player_figure->animator.move_blend();
+      in.run_blend = player_figure->animator.run_blend();
+    }
+    return in;
+  };
+  std::vector<float> recording;
+  const bool recording_audio = opt.headless && !opt.audio_out.empty();
+  auto record = [&](float dt) {
+    soundscape.update(sound_inputs(), dt);
+    if (!recording_audio) return;
+    u32 frames = static_cast<u32>(std::lround(dt * static_cast<float>(audio::kSampleRate)));
+    size_t at = recording.size();
+    recording.resize(at + frames * 2);
+    mixer.render(recording.data() + at, frames);
+  };
+
   // The world is drawn from the static scene plus the player's body.
   auto frame_scene = [&]() {
     Scene all = scene;
@@ -591,6 +637,7 @@ int main(int argc, char** argv) {
       animate_player(sim_dt);
       animate_bystanders(sim_dt);
       director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
+      record(sim_dt);
     }
     // Let the camera settle after walking, as a player standing still would see it.
     int settle = steps > 0 ? static_cast<int>(opt.settle_seconds / sim_dt) : 0;
@@ -598,6 +645,21 @@ int main(int argc, char** argv) {
       simulate({0, 0}, false);
       animate_bystanders(sim_dt);
       director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
+      record(sim_dt);
+    }
+    for (int i = 0; i < static_cast<int>(opt.listen_seconds / sim_dt); ++i) {
+      simulate({0, 0}, false);
+      animate_bystanders(sim_dt);
+      director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
+      record(sim_dt);
+    }
+    if (recording_audio) {
+      if (audio::write_wav(opt.audio_out, recording))
+        log_info("recorded %.1f s of sound to %s (%d footsteps, %d bird calls)",
+                 static_cast<double>(recording.size()) / 2.0 / audio::kSampleRate, opt.audio_out.c_str(),
+                 soundscape.footsteps_played(), soundscape.birds_played());
+      else
+        log_error("could not write %s", opt.audio_out.c_str());
     }
     if (steps > 0) {
       log_info("walked %.1f s, now at (%.2f, %.2f, %.2f)", static_cast<double>(opt.walk_seconds),
@@ -634,7 +696,10 @@ int main(int argc, char** argv) {
     }
   } else {
     log_info("controls: WASD move, Shift run, arrows or right-mouse drag look, wheel zoom,");
-    log_info("          C camera zone mode, Q/E time of day, P pause sun, F12 screenshot, Esc quit");
+    log_info("          C camera zone mode, Q/E time of day, P pause sun, M mute, F12 screenshot, Esc quit");
+    bool muted = opt.mute;
+    if (!opt.mute) mixer.start_device();
+    mixer.set_master(muted ? 0.0f : kMasterVolume);
     InputState input;
     bool paused = false;
     int shot = 0;
@@ -668,6 +733,12 @@ int main(int argc, char** argv) {
         }
       }
 
+      if (input.toggle_mute) {
+        muted = !muted;
+        if (!muted && !mixer.device_running()) mixer.start_device();
+        mixer.set_master(muted ? 0.0f : kMasterVolume);
+        log_info("sound %s", muted ? "muted" : "on");
+      }
       if (input.toggle_camera_mode) {
         director.directed_only = !director.directed_only;
         log_info("camera zones: %s", director.directed_only
@@ -697,6 +768,7 @@ int main(int argc, char** argv) {
       }
 
       animate_bystanders(dt);
+      soundscape.update(sound_inputs(), dt);
       if (!device->begin_frame()) continue;
       upload_figures();
       seconds += dt;

@@ -30,6 +30,7 @@ class SdlWindow final : public Window {
     input.toggle_pause = false;
     input.screenshot = false;
     input.toggle_camera_mode = false;
+    input.toggle_mute = false;
     input.resized = false;
     input.mouse_dx = 0.0f;
     input.mouse_dy = 0.0f;
@@ -50,6 +51,7 @@ class SdlWindow final : public Window {
           if (e.key.key == SDLK_P) input.toggle_pause = true;
           if (e.key.key == SDLK_F12) input.screenshot = true;
           if (e.key.key == SDLK_C) input.toggle_camera_mode = true;
+          if (e.key.key == SDLK_M) input.toggle_mute = true;
           break;
         case SDL_EVENT_MOUSE_MOTION:
           if (e.motion.state & SDL_BUTTON_RMASK) {

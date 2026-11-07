@@ -62,6 +62,16 @@ add_library(rk_platform STATIC
   engine/platform/platform_sdl.cpp)
 target_link_libraries(rk_platform PUBLIC rk_core PRIVATE SDL3::SDL3-static)
 
+find_package(Threads REQUIRED)
+add_library(rk_audio STATIC
+  engine/audio/audio.cpp
+  engine/audio/miniaudio_impl.cpp)
+target_include_directories(rk_audio PRIVATE third_party)
+target_link_libraries(rk_audio PUBLIC rk_core PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+if(UNIX AND NOT APPLE)
+  target_link_libraries(rk_audio PRIVATE m)
+endif()
+
 add_library(rk_render STATIC
   engine/render/vulkan/vk_device.cpp)
 target_link_libraries(rk_render PUBLIC rk_core PRIVATE Vulkan::Vulkan)
@@ -103,10 +113,11 @@ add_executable(rakshas
   game/model.cpp
   game/foliage.cpp
   game/animation.cpp
+  game/soundscape.cpp
   game/sky_model.cpp
   game/screenshot.cpp)
 target_include_directories(rakshas PRIVATE game third_party)
-target_link_libraries(rakshas PRIVATE rk_core rk_platform rk_render)
+target_link_libraries(rakshas PRIVATE rk_core rk_platform rk_render rk_audio)
 add_dependencies(rakshas rk_shaders)
 # Content files are copied on every build, so edits always show up.
 add_custom_target(rk_content ALL
@@ -123,11 +134,11 @@ set_target_properties(rakshas PROPERTIES
 # ---------------------------------------------------------------------------
 if(RK_BUILD_TESTS)
   enable_testing()
-  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp tests/test_character.cpp tests/test_camera.cpp tests/test_model.cpp tests/test_foliage.cpp tests/test_animation.cpp
+  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp tests/test_character.cpp tests/test_camera.cpp tests/test_model.cpp tests/test_foliage.cpp tests/test_animation.cpp tests/test_audio.cpp tests/test_soundscape.cpp
     game/sky_model.cpp game/shapes.cpp game/region.cpp game/character.cpp game/camera_director.cpp
-    game/model.cpp game/foliage.cpp game/animation.cpp)
+    game/model.cpp game/foliage.cpp game/animation.cpp game/soundscape.cpp)
   target_compile_definitions(rk_tests PRIVATE RK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   target_include_directories(rk_tests PRIVATE game tests third_party)
-  target_link_libraries(rk_tests PRIVATE rk_core)
+  target_link_libraries(rk_tests PRIVATE rk_core rk_audio)
   add_test(NAME unit_tests COMMAND rk_tests)
 endif()

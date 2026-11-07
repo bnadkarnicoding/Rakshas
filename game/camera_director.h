@@ -73,12 +73,15 @@ class CameraDirector {
   Framing framing() const { return framing_; }
   const std::string& zone_name() const { return zone_name_; }
   float zone_strength() const { return weight_; }
+  // Framing of the strongest nearby zone, even before it fully takes over.
+  Framing zone_framing() const { return zone_framing_; }
 
  private:
   CameraRig rig_;
   Framing framing_ = Framing::Explore;
   std::string zone_name_;
   float weight_ = 0.0f;
+  Framing zone_framing_ = Framing::Explore;
   float explore_distance_ = 6.0f;
   float pitch_offset_ = 0.0f;  // player's tilt in Explore
   float nudge_yaw_ = 0.0f;     // player's nudge inside a directed zone
