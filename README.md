@@ -22,13 +22,13 @@ A window shows a gray-box scene under a natural sky, lit by a sun that moves thr
 
 **One-time setup:**
 
-1. Install **Visual Studio 2022 Community** with the **"Desktop development with C++"** workload. This includes CMake.
+1. Install **Visual Studio Community** (2022 or newer) with the **"Desktop development with C++"** workload. This includes CMake and Ninja.
 2. Install **Git for Windows**.
 3. Install the **Vulkan SDK** from LunarG (vulkan.lunarg.com). The defaults are fine. It provides the shader compiler and validation layers.
 
 **Build and run:**
 
-Open **"x64 Native Tools Command Prompt for VS 2022"** and run:
+From the Start menu, open **"x64 Native Tools Command Prompt"** (installed with Visual Studio) and run:
 
 ```
 git clone <your repository URL> rakshas
