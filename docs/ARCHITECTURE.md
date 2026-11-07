@@ -143,7 +143,7 @@ C++ allows memory bugs, so every build is checked automatically:
 |---|---|---|
 | **1** ✓ | A window opens. A shape lit by a sun appears under a sky. Keyboard and gamepad move the view. | platform, core/math, render (RHI + Vulkan) |
 | **2** ✓ | A gray-box landscape from a content file. Sun and moon shadows. A moon and stars. | core/data (content reader), region, render (shadow pass) |
-| 3 | A capsule walks and collides with walls | collision, input, world |
+| **3** ✓ | A capsule walks and runs, follows the ground and collides with objects. The camera follows. | game/character (fixed 60 Hz step), input |
 | 4 | The hybrid camera: follows, pulls wide on a ridge, tightens for a duel | camera |
 | 5 | An animated mannequin | anim, asset converter |
 | 6 | Footsteps, wind and silence | audio |

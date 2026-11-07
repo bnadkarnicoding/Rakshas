@@ -145,6 +145,10 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
       data::read_number(n, "yaw", p.yaw, errors);
       read_vec3(n, "color", p.color, errors, false);
       out.props.push_back(p);
+    } else if (n.type == "player") {
+      data::check_fields(n, {"start", "facing"}, errors);
+      read_vec2(n, "start", out.player.position, errors, false);
+      data::read_number(n, "facing", out.player.facing, errors);
     } else if (n.type == "camera") {
       data::check_fields(n, {"target", "distance", "yaw", "pitch"}, errors);
       read_vec2(n, "target", out.camera.target, errors, false);
@@ -153,8 +157,8 @@ bool build_region(const data::Node& root, Region& out, data::Errors& errors) {
       data::read_number(n, "pitch", out.camera.pitch, errors);
     } else {
       errors.add(n.file, n.line,
-                 "a region can contain 'terrain', 'prop' or 'camera', not '" + n.type + "'" +
-                     data::did_you_mean(n.type, {"terrain", "prop", "camera"}));
+                 "a region can contain 'terrain', 'prop', 'player' or 'camera', not '" + n.type + "'" +
+                     data::did_you_mean(n.type, {"terrain", "prop", "player", "camera"}));
     }
   }
   return errors.messages.size() == before;

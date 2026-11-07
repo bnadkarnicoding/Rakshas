@@ -11,16 +11,21 @@
 
 namespace rk {
 
-// Input gathered once per frame, already mapped from keyboard + gamepad.
+// Input gathered once per frame, already mapped from keyboard, mouse and gamepad.
 struct InputState {
-  bool quit = false;
+  bool quit = false;           // Esc / gamepad Back
   bool resized = false;
-  bool toggle_pause = false;   // Space / gamepad South
+  bool toggle_pause = false;   // P / gamepad Y (North): pause the sun
   bool screenshot = false;     // F12
-  float orbit = 0.0f;          // -1..1  (A/D, Left/Right, left stick X)
-  float zoom = 0.0f;           // -1..1  (W/S, Up/Down, left stick Y)
-  float tilt = 0.0f;           // -1..1  (R/F, right stick Y): + looks up
-  float time_scrub = 0.0f;     // -1..1  (Q/E, triggers)
+  float move_x = 0.0f;         // -1..1 right   (D/A, left stick X)
+  float move_y = 0.0f;         // -1..1 forward (W/S, left stick Y)
+  bool run = false;            // Shift / left bumper
+  float look_x = 0.0f;         // -1..1 (Left/Right arrows, right stick X): + turns right
+  float look_y = 0.0f;         // -1..1 (Up/Down arrows, right stick Y):   + looks up
+  float mouse_dx = 0.0f;       // pixels dragged with the right mouse button this frame
+  float mouse_dy = 0.0f;
+  float zoom = 0.0f;           // + moves the camera further away (wheel, D-pad, PageUp/Down)
+  float time_scrub = 0.0f;     // -1..1 (Q/E, triggers)
 };
 
 struct WindowDesc {

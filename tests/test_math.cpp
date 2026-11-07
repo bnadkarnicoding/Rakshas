@@ -102,3 +102,27 @@ TEST(orthographic_vulkan_conventions) {
   CHECK_NEAR(corner.x, 1.0f, 1e-6f);
   CHECK_NEAR(corner.y, -1.0f, 1e-6f);  // Y flipped like perspective()
 }
+
+TEST(capsule_triangles_face_outward) {
+  Mesh cap = make_capsule(0.35f, 1.75f);
+  int checked = 0;
+  for (size_t i = 0; i < cap.indices.size(); i += 3) {
+    Vec3 a = cap.vertices[cap.indices[i]].position;
+    Vec3 b = cap.vertices[cap.indices[i + 1]].position;
+    Vec3 c = cap.vertices[cap.indices[i + 2]].position;
+    Vec3 face = cross(b - a, c - a);
+    if (length(face) < 1e-6f) continue;  // zero-area triangles at the poles
+    Vec3 centroid = (a + b + c) * (1.0f / 3.0f);
+    Vec3 axis_point{0, clampf(centroid.y, 0.35f, 1.4f), 0};
+    CHECK(dot(face, centroid - axis_point) > 0.0f);
+    ++checked;
+  }
+  CHECK(checked > 100);
+  float top = 0, bottom = 10;
+  for (const Vertex& v : cap.vertices) {
+    top = std::fmax(top, v.position.y);
+    bottom = std::fmin(bottom, v.position.y);
+  }
+  CHECK_NEAR(top, 1.75f, 1e-4f);
+  CHECK_NEAR(bottom, 0.0f, 1e-4f);
+}

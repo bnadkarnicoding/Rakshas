@@ -1,4 +1,4 @@
-# Rung 2 gray-box region: the first rough shape of the Release 1 land.
+# Gray-box region (rungs 2-3): the first rough shape of the Release 1 land.
 #
 # Units are metres. Positions are "x z": x runs east (+) to west (-),
 # z runs south (+) to north (-). The sun rises in the east.
@@ -15,10 +15,10 @@ terrain
 
   # The ridge players will climb to look over the valley (a "Vista" spot later).
   ridge lookout_ridge
-    from: 30 -15
-    to: 70 -70
-    width: 16
-    height: 14
+    from: 45 -25
+    to: 85 -80
+    width: 34
+    height: 12
 
   hill north_hill
     center: -35 -55
@@ -70,7 +70,7 @@ prop hut_b
   color: 0.62 0.55 0.44
 
 prop ridge_marker
-  position: 42 -32
+  position: 58 -42
   size: 1 4 1
   color: 0.70 0.55 0.40
 
@@ -85,10 +85,15 @@ prop hill_stone_2
   yaw: 10
   color: 0.70 0.55 0.40
 
-# --- Where the view starts -------------------------------------------------
+# --- Where the player and view start --------------------------------------
 
+# facing is in degrees: 0 = north, 90 = west, -90 = east, 180 = south.
+player
+  start: 0 12
+  facing: 0
+
+# For the follow camera, target is ignored (the camera follows the player).
 camera
-  target: 0 -4
-  distance: 24
-  yaw: 20
-  pitch: 16
+  distance: 6
+  yaw: 0
+  pitch: 14

@@ -5,9 +5,9 @@ A story-and-exploration game set in a pristine, mythic world stretching from Ind
 - **Design rules:** `CorePrinciples.md`, kept in the Rakshas Studio project.
 - **Engine design:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-## Current state: rung 2
+## Current state: rung 3
 
-A gray-box landscape with hills, a ridge and a flat village clearing, loaded from a content file. The sun and moon cast soft shadows, and the night sky has a moon and stars. The view orbits with the keyboard or a gamepad.
+You walk a placeholder character across a gray-box landscape (hills, a lookout ridge and a village clearing) loaded from a content file. The character follows the ground, can't pass through objects, and is followed by the camera. The sun and moon cast soft shadows, and the night sky has a moon and stars.
 
 ### Changing the land yourself
 
@@ -21,18 +21,20 @@ Open it in any text editor (Notepad works). You can:
 
 - change a number,
 - add a `hill`,
-- move a `prop`.
+- move a `prop`,
+- move the `player` start.
 
 Save, rebuild (`cmake --build --preset windows-release`), and run. If something in the file is wrong, the game tells you the line and suggests a fix, for example "did you mean 'position'?".
 
-| Control | Keyboard | Gamepad |
+| Control | Keyboard / mouse | Gamepad |
 |---|---|---|
-| Orbit the view | A / D or ← / → | Left stick ↔ or right stick ↔ |
-| Closer / further | W / S or ↑ / ↓ | Left stick ↕ |
-| Tilt up / down | R / F | Right stick ↕ |
+| Walk | W A S D | Left stick |
+| Run | Shift (hold) | Left bumper (hold) |
+| Look around | Arrow keys, or drag with the right mouse button | Right stick |
+| Camera closer / further | Mouse wheel, or Page Up / Page Down | D-pad up / down |
 | Scrub time of day | Q / E | Triggers |
-| Pause the sun | Space | A / Cross (South) |
-| Screenshot | F12 | — |
+| Pause the sun | P | Y / Triangle |
+| Screenshot | F12 | (keyboard only) |
 | Quit | Esc | Back / Select |
 
 ## Building on Windows

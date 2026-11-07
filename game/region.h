@@ -62,10 +62,16 @@ struct CameraStart {
   float pitch = 20.0f;  // degrees above the horizon
 };
 
+struct PlayerStart {
+  Vec2 position;        // x z
+  float facing = 0.0f;  // degrees; 0 faces north (-z), 90 faces west, -90 faces east
+};
+
 struct Region {
   Terrain terrain;
   std::vector<PropPlacement> props;
   CameraStart camera;
+  PlayerStart player;
 };
 
 // Builds a Region from parsed content. Problems are added to `errors`.

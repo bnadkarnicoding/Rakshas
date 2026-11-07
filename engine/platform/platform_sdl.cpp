@@ -30,6 +30,9 @@ class SdlWindow final : public Window {
     input.toggle_pause = false;
     input.screenshot = false;
     input.resized = false;
+    input.mouse_dx = 0.0f;
+    input.mouse_dy = 0.0f;
+    float wheel = 0.0f;
 
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -43,8 +46,17 @@ class SdlWindow final : public Window {
         case SDL_EVENT_KEY_DOWN:
           if (e.key.repeat) break;
           if (e.key.key == SDLK_ESCAPE) input.quit = true;
-          if (e.key.key == SDLK_SPACE) input.toggle_pause = true;
+          if (e.key.key == SDLK_P) input.toggle_pause = true;
           if (e.key.key == SDLK_F12) input.screenshot = true;
+          break;
+        case SDL_EVENT_MOUSE_MOTION:
+          if (e.motion.state & SDL_BUTTON_RMASK) {
+            input.mouse_dx += e.motion.xrel;
+            input.mouse_dy += e.motion.yrel;
+          }
+          break;
+        case SDL_EVENT_MOUSE_WHEEL:
+          wheel -= e.wheel.y;  // scrolling up brings the camera closer
           break;
         case SDL_EVENT_GAMEPAD_ADDED:
           if (!gamepad_) {
@@ -60,7 +72,7 @@ class SdlWindow final : public Window {
           }
           break;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-          if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) input.toggle_pause = true;
+          if (e.gbutton.button == SDL_GAMEPAD_BUTTON_NORTH) input.toggle_pause = true;
           if (e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK) input.quit = true;
           break;
         default:
@@ -69,29 +81,45 @@ class SdlWindow final : public Window {
     }
 
     const bool* keys = SDL_GetKeyboardState(nullptr);
-    auto key = [&](SDL_Scancode a, SDL_Scancode b) { return keys[a] || keys[b]; };
-    float orbit = 0.0f, zoom = 0.0f, scrub = 0.0f, tilt = 0.0f;
-    if (key(SDL_SCANCODE_A, SDL_SCANCODE_LEFT)) orbit -= 1.0f;
-    if (key(SDL_SCANCODE_D, SDL_SCANCODE_RIGHT)) orbit += 1.0f;
-    if (key(SDL_SCANCODE_W, SDL_SCANCODE_UP)) zoom -= 1.0f;
-    if (key(SDL_SCANCODE_S, SDL_SCANCODE_DOWN)) zoom += 1.0f;
-    if (keys[SDL_SCANCODE_R]) tilt += 1.0f;
-    if (keys[SDL_SCANCODE_F]) tilt -= 1.0f;
+    float mx = 0, my = 0, lx = 0, ly = 0, zoom = 0, scrub = 0;
+    if (keys[SDL_SCANCODE_D]) mx += 1.0f;
+    if (keys[SDL_SCANCODE_A]) mx -= 1.0f;
+    if (keys[SDL_SCANCODE_W]) my += 1.0f;
+    if (keys[SDL_SCANCODE_S]) my -= 1.0f;
+    if (keys[SDL_SCANCODE_RIGHT]) lx += 1.0f;
+    if (keys[SDL_SCANCODE_LEFT]) lx -= 1.0f;
+    if (keys[SDL_SCANCODE_UP]) ly += 1.0f;
+    if (keys[SDL_SCANCODE_DOWN]) ly -= 1.0f;
+    if (keys[SDL_SCANCODE_PAGEDOWN]) zoom += 1.0f;
+    if (keys[SDL_SCANCODE_PAGEUP]) zoom -= 1.0f;
     if (keys[SDL_SCANCODE_Q]) scrub -= 1.0f;
     if (keys[SDL_SCANCODE_E]) scrub += 1.0f;
+    bool run = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
 
     if (gamepad_) {
-      orbit += axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFTX);
-      zoom += axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFTY);
-      orbit += axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHTX);
-      tilt -= axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHTY);
+      mx += axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFTX);
+      my -= axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFTY);
+      lx += axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHTX);
+      ly -= axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHTY);
+      if (SDL_GetGamepadButton(gamepad_, SDL_GAMEPAD_BUTTON_DPAD_DOWN)) zoom += 1.0f;
+      if (SDL_GetGamepadButton(gamepad_, SDL_GAMEPAD_BUTTON_DPAD_UP)) zoom -= 1.0f;
+      run = run || SDL_GetGamepadButton(gamepad_, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
       scrub += axis_value(gamepad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) -
                axis_value(gamepad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
     }
-    input.orbit = clampf(orbit, -1.0f, 1.0f);
-    input.zoom = clampf(zoom, -1.0f, 1.0f);
+    // Keep diagonal movement from being faster than straight movement.
+    float len = std::sqrt(mx * mx + my * my);
+    if (len > 1.0f) {
+      mx /= len;
+      my /= len;
+    }
+    input.move_x = mx;
+    input.move_y = my;
+    input.run = run;
+    input.look_x = clampf(lx, -1.0f, 1.0f);
+    input.look_y = clampf(ly, -1.0f, 1.0f);
+    input.zoom = clampf(zoom, -1.0f, 1.0f) + wheel * 8.0f;  // one wheel notch ~ a short push
     input.time_scrub = clampf(scrub, -1.0f, 1.0f);
-    input.tilt = clampf(tilt, -1.0f, 1.0f);
   }
 
   void drawable_size(u32& width, u32& height) const override {

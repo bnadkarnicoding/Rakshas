@@ -20,6 +20,9 @@ struct Mesh {
 // Unit cube centred on the origin (-0.5..0.5 on each axis), outward normals.
 Mesh make_box();
 
+// Upright capsule standing on y = 0: total height `height`, radius `radius`.
+Mesh make_capsule(float radius, float height, int segments = 20, int rings = 6);
+
 // Flat square on the XZ plane at y = 0, facing up, `half_size` from centre to edge.
 Mesh make_ground(float half_size);
 

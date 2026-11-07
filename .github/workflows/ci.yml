@@ -28,8 +28,10 @@ jobs:
         run: |
           mkdir -p shots
           for t in 0.27 0.42 0.72 0.02; do
-            ./build/linux-debug/bin/rakshas --headless --validate --time $t --out shots/rung1_t$t.png
+            ./build/linux-debug/bin/rakshas --headless --validate --time $t --out shots/view_t$t.png
           done
+          # Scripted walk: run from the clearing up the lookout ridge.
+          ./build/linux-debug/bin/rakshas --headless --validate --time 0.62 --walk 18 --move "0.71 0.70" --run --out shots/walk_ridge.png
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots
