@@ -1,0 +1,10 @@
+# Sound balance. 1 = as designed; 0.5 = half as loud; 2 = twice as loud.
+# Change a number, save, and restart the game to hear the difference.
+
+mix
+  footsteps: 1
+  wind: 1
+  leaves: 1
+  birds: 1
+  insects: 1
+  master: 1.5

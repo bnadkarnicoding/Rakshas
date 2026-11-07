@@ -10,8 +10,8 @@ AmbienceLevels ambience_levels(const SoundscapeInputs& in) {
   float daylight = smoothstepf(-0.05f, 0.15f, in.sun_elevation);
   float high = smoothstepf(4.0f, 12.0f, in.height);
 
-  a.wind = (0.18f + 0.22f * open + 0.35f * high) * lerpf(1.0f, 0.8f, in.night);
-  a.leaves = 0.45f * trees * (0.6f + 0.5f * a.wind);
+  a.wind = (0.08f + 0.10f * open + 0.18f * high) * lerpf(1.0f, 0.8f, in.night);
+  a.leaves = 0.32f * trees * (0.7f + a.wind);
   a.insects = 0.32f * in.night;
   a.birds_per_minute = daylight * (6.0f + 14.0f * trees);
   // Stillness before the strike: the world hushes as a duel framing takes hold.
@@ -60,9 +60,9 @@ void Soundscape::update(const SoundscapeInputs& in, float dt) {
   if (!mixer_) return;
   AmbienceLevels a = ambience_levels(in);
   const float glide = 0.6f;  // seconds: ambience drifts, never jumps
-  mixer_->set(wind_voice_, a.wind * a.stillness, 0.0f, 1.0f, glide);
-  mixer_->set(leaves_voice_, a.leaves * a.stillness, 0.0f, 1.0f, glide);
-  mixer_->set(insects_voice_, a.insects * a.stillness, 0.0f, 1.0f, glide);
+  mixer_->set(wind_voice_, a.wind * a.stillness * mix_.wind, 0.0f, 1.0f, glide);
+  mixer_->set(leaves_voice_, a.leaves * a.stillness * mix_.leaves, 0.0f, 1.0f, glide);
+  mixer_->set(insects_voice_, a.insects * a.stillness * mix_.insects, 0.0f, 1.0f, glide);
 
   // Birds: occasional calls from either side, fewer in the open, none at night.
   bird_timer_ -= dt;
@@ -70,7 +70,7 @@ void Soundscape::update(const SoundscapeInputs& in, float dt) {
     float rate = a.birds_per_minute * a.stillness * a.stillness;
     if (rate > 0.05f && !birds_.empty()) {
       auto s = birds_[static_cast<size_t>(random01() * static_cast<float>(birds_.size())) % birds_.size()];
-      mixer_->play(s, {0.22f * a.stillness, random01() * 1.6f - 0.8f, 0.9f + 0.2f * random01(), false});
+      mixer_->play(s, {0.40f * a.stillness * mix_.birds, random01() * 1.6f - 0.8f, 0.9f + 0.2f * random01(), false});
       ++birds_played_;
     }
     float mean_gap = rate > 0.05f ? 60.0f / rate : 5.0f;
@@ -85,7 +85,7 @@ void Soundscape::update(const SoundscapeInputs& in, float dt) {
     int pick = static_cast<int>(random01() * static_cast<float>(set.size())) % static_cast<int>(set.size());
     if (pick == last_step_ && set.size() > 1) pick = (pick + 1) % static_cast<int>(set.size());
     last_step_ = pick;
-    float gain = (0.32f + 0.38f * in.run_blend) * (1.0f - 0.3f * clampf(in.duel, 0.0f, 1.0f));
+    float gain = (0.42f + 0.40f * in.run_blend) * (1.0f - 0.3f * clampf(in.duel, 0.0f, 1.0f)) * mix_.footsteps;
     float pan = (footsteps_played_ % 2 == 0 ? -0.08f : 0.08f);
     mixer_->play(set[static_cast<size_t>(pick)], {gain, pan, 0.93f + 0.14f * random01(), false});
     ++footsteps_played_;

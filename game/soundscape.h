@@ -24,6 +24,16 @@ struct SoundscapeInputs {
   float run_blend = 0.0f;      // 0 walking .. 1 running
 };
 
+// Volume of each part of the soundscape (1 = as designed). Loaded from
+// content/sounds/mix.rk so the balance can be tuned without code.
+struct SoundMix {
+  float footsteps = 1.0f;
+  float wind = 1.0f;
+  float leaves = 1.0f;
+  float birds = 1.0f;
+  float insects = 1.0f;
+};
+
 struct AmbienceLevels {
   float wind = 0.0f;
   float leaves = 0.0f;
@@ -42,12 +52,15 @@ class Soundscape {
  public:
   // Loads the sounds from `sound_dir` (e.g. content/sounds/) into the mixer.
   void load(audio::Mixer& mixer, const std::string& sound_dir);
+  void set_mix(const SoundMix& mix) { mix_ = mix; }
+  const SoundMix& mix() const { return mix_; }
   void update(const SoundscapeInputs& in, float dt);
   int footsteps_played() const { return footsteps_played_; }
   int birds_played() const { return birds_played_; }
 
  private:
   audio::Mixer* mixer_ = nullptr;
+  SoundMix mix_;
   std::vector<audio::SoundHandle> steps_dirt_, steps_grass_, birds_;
   audio::SoundHandle wind_, leaves_, insects_;
   audio::VoiceHandle wind_voice_, leaves_voice_, insects_voice_;

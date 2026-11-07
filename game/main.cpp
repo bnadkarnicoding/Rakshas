@@ -560,10 +560,30 @@ int main(int argc, char** argv) {
   // Sound: our mixer, fed by the soundscape rules; miniaudio sends it to the
   // speakers in the windowed game. Headless runs can record it to a WAV file.
   audio::Mixer mixer;
-  constexpr float kMasterVolume = 1.5f;
-  mixer.set_master(kMasterVolume);
+  float master_volume = 1.5f;
   Soundscape soundscape;
   soundscape.load(mixer, content_dir + "sounds/");
+  {
+    // Optional volume balance, editable as text: content/sounds/mix.rk
+    data::Node mix_root;
+    data::Errors mix_errors;
+    if (data::load_file(content_dir + "sounds/mix.rk", mix_root, mix_errors)) {
+      SoundMix mix;
+      for (const data::Node& n : mix_root.children) {
+        if (n.type != "mix") continue;
+        data::check_fields(n, {"footsteps", "wind", "leaves", "birds", "insects", "master"}, mix_errors);
+        data::read_number(n, "footsteps", mix.footsteps, mix_errors);
+        data::read_number(n, "wind", mix.wind, mix_errors);
+        data::read_number(n, "leaves", mix.leaves, mix_errors);
+        data::read_number(n, "birds", mix.birds, mix_errors);
+        data::read_number(n, "insects", mix.insects, mix_errors);
+        data::read_number(n, "master", master_volume, mix_errors);
+      }
+      soundscape.set_mix(mix);
+    }
+    if (!mix_errors.ok()) log_warn("sound mix:\n%s", mix_errors.joined().c_str());
+    mixer.set_master(master_volume);
+  }
   auto sound_inputs = [&]() {
     SoundscapeInputs in;
     SkyState sky = evaluate_sky(time_of_day);
@@ -699,7 +719,7 @@ int main(int argc, char** argv) {
     log_info("          C camera zone mode, Q/E time of day, P pause sun, M mute, F12 screenshot, Esc quit");
     bool muted = opt.mute;
     if (!opt.mute) mixer.start_device();
-    mixer.set_master(muted ? 0.0f : kMasterVolume);
+    mixer.set_master(muted ? 0.0f : master_volume);
     InputState input;
     bool paused = false;
     int shot = 0;
@@ -736,7 +756,7 @@ int main(int argc, char** argv) {
       if (input.toggle_mute) {
         muted = !muted;
         if (!muted && !mixer.device_running()) mixer.start_device();
-        mixer.set_master(muted ? 0.0f : kMasterVolume);
+        mixer.set_master(muted ? 0.0f : master_volume);
         log_info("sound %s", muted ? "muted" : "on");
       }
       if (input.toggle_camera_mode) {
