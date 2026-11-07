@@ -126,3 +126,15 @@ TEST(capsule_triangles_face_outward) {
   CHECK_NEAR(top, 1.75f, 1e-4f);
   CHECK_NEAR(bottom, 0.0f, 1e-4f);
 }
+
+TEST(quaternion_rotation_matches_rotate_y) {
+  Quat q = axis_angle({0, 1, 0}, 0.7f);
+  Mat4 a = rotation_matrix(q);
+  Mat4 b = rotate_y(0.7f);
+  CHECK(mat_near(a, b, 1e-5f));
+  Quat x = axis_angle({1, 0, 0}, kPi * 0.5f);
+  Vec4 down = rotation_matrix(x) * Vec4{0, -1, 0, 0};
+  CHECK_NEAR(down.z, -1.0f, 1e-5f);  // +pitch swings a hanging limb forward (-Z)
+  Quat mid = nlerp(Quat{}, q, 0.5f);
+  CHECK(mat_near(rotation_matrix(mid), rotate_y(0.35f), 1e-3f));
+}

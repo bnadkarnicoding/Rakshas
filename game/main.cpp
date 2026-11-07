@@ -33,6 +33,7 @@
 #include "scene_constants.h"
 #include "screenshot.h"
 #include "camera_director.h"
+#include "animation.h"
 #include "foliage.h"
 #include "model.h"
 #include "character.h"
@@ -93,6 +94,7 @@ bool parse_args(int argc, char** argv, Options& o) {
       o.move.y = std::strtof(end, nullptr);
     }
     else if (a == "--run") o.run = true;
+    else if (a == "--settle" && (v = next("--settle"))) o.settle_seconds = std::strtof(v, nullptr);
     else if (a == "--day-length" && (v = next("--day-length"))) o.day_length_seconds = std::strtof(v, nullptr);
     else if (a == "--out" && (v = next("--out"))) o.out = v;
     else {
@@ -108,6 +110,13 @@ bool parse_args(int argc, char** argv, Options& o) {
 }
 
 float wrap01(float t) { return t - std::floor(t); }
+
+bool file_readable(const std::string& path) {
+  FILE* f = std::fopen(path.c_str(), "rb");
+  if (!f) return false;
+  std::fclose(f);
+  return true;
+}
 
 // "06:45"-style text for a time of day in 0..1.
 std::string clock_text(float time_of_day) {
@@ -259,8 +268,18 @@ void render_frame(rhi::Device& device, const Pipelines& pl, const Scene& scene, 
   device.end_pass();
 }
 
-constexpr Vec3 kPlayerColor{0.62f, 0.33f, 0.22f};
+constexpr Vec3 kPlayerColor{0.62f, 0.33f, 0.22f};       // capsule fallback
 constexpr Vec3 kPlayerMarkerColor{0.85f, 0.78f, 0.62f};
+constexpr Vec3 kPlayerTint{1.0f, 0.92f, 0.85f};         // multiplies the mannequin's wood
+
+// An animated character: its animator, and a vertex buffer rewritten every
+// frame with the posed (skinned) mesh.
+struct AnimatedFigure {
+  LocomotionAnimator animator;
+  GpuMesh mesh;
+  Mat4 model = Mat4::identity();
+  Vec3 color{1, 1, 1};
+};
 constexpr Vec3 kBarkColor{0.36f, 0.27f, 0.20f};
 constexpr Vec3 kLeafColor{0.16f, 0.26f, 0.10f};
 constexpr Vec3 kGrassColor{0.36f, 0.38f, 0.17f};
@@ -346,7 +365,7 @@ int main(int argc, char** argv) {
   desc.height = opt.height;
   desc.shadow_map_size = opt.low_preset ? 1024 : 2048;
   if (!opt.headless) {
-    window = Window::create({"Rakshas — detail preview", opt.width, opt.height});
+    window = Window::create({"Rakshas — rung 5", opt.width, opt.height});
     if (!window) return 1;
     desc.instance_extensions = window->vulkan_instance_extensions();
     desc.create_surface = [&](void* instance, u64* surface) {
@@ -436,12 +455,63 @@ int main(int argc, char** argv) {
         scene.props.push_back({mesh, at, c, texture(part.texture_path), 0.0f, true});
       }
     } else {
-      const GpuMesh* mesh = p.shape == PropShape::Figure ? &capsule : &box;
-      float mapped = p.shape == PropShape::Box && !p.texture.empty() ? 3.0f : 0.0f;
-      scene.props.push_back({mesh, at, p.color, texture(texture_file(p.texture)), mapped, true});
+      // Figures become animated mannequins below (capsules only as a fallback).
+      bool animated_later = p.shape == PropShape::Figure && file_readable(content_dir + "models/mannequin.gltf");
+      if (!animated_later) {
+        const GpuMesh* mesh = p.shape == PropShape::Figure ? &capsule : &box;
+        float mapped = p.shape == PropShape::Box && !p.texture.empty() ? 3.0f : 0.0f;
+        scene.props.push_back({mesh, at, p.color, texture(texture_file(p.texture)), mapped, true});
+      }
     }
     obstacles.push_back(obstacle_from_prop(p));
   }
+
+  // Animated figures: the player and placeholder people use the mannequin.
+  SkinnedModel mannequin;
+  data::Errors figure_errors;
+  const bool have_mannequin =
+      load_skinned_model(content_dir + "models/mannequin.gltf", mannequin, figure_errors);
+  if (!have_mannequin)
+    log_warn("animated figure unavailable, using capsules:\n%s", figure_errors.joined().c_str());
+  rhi::BufferHandle mannequin_indices;
+  if (have_mannequin)
+    mannequin_indices = device->create_buffer(rhi::BufferUsage::Index32, mannequin.indices.data(),
+                                              mannequin.indices.size() * sizeof(u32));
+  std::deque<AnimatedFigure> figures;  // stable addresses for Prop::mesh
+  auto make_figure = [&](Vec3 color, float time_offset) -> AnimatedFigure& {
+    AnimatedFigure f;
+    f.animator = LocomotionAnimator(&mannequin, time_offset);
+    f.mesh.vertices = device->create_dynamic_buffer(rhi::BufferUsage::Vertex,
+                                                    mannequin.vertices.size() * sizeof(Vertex));
+    f.mesh.indices = mannequin_indices;
+    f.mesh.index_count = static_cast<u32>(mannequin.indices.size());
+    f.color = {mannequin.color.x * color.x, mannequin.color.y * color.y, mannequin.color.z * color.z};
+    figures.push_back(f);
+    return figures.back();
+  };
+  if (have_mannequin) {
+    float offset = 0.7f;
+    for (const PropPlacement& p : region.props) {
+      if (p.shape != PropShape::Figure) continue;
+      AnimatedFigure& f = make_figure(p.color * 1.6f, offset);
+      Vec3 feet{p.position.x, region.terrain.height_at(p.position.x, p.position.y), p.position.y};
+      f.model = translate(feet) * rotate_y(radians(p.yaw));
+      offset += 1.3f;
+    }
+  }
+  AnimatedFigure* player_figure = have_mannequin ? &make_figure(kPlayerTint, 0.0f) : nullptr;
+  std::vector<Vertex> skinned_scratch;
+  // Poses every figure and uploads its mesh for this frame (after begin_frame).
+  auto upload_figures = [&]() {
+    for (AnimatedFigure& f : figures) {
+      skin_vertices(mannequin, skin_matrices(mannequin.skeleton, f.animator.pose()), skinned_scratch);
+      device->update_buffer(f.mesh.vertices, skinned_scratch.data(), skinned_scratch.size() * sizeof(Vertex));
+    }
+  };
+  auto animate_bystanders = [&](float dt) {
+    for (AnimatedFigure& f : figures)
+      if (&f != player_figure) f.animator.update(0.0f, body.walk_speed, body.run_speed, dt);
+  };
 
   // Trees and grass, placed from the region's forest and grass areas.
   GpuMesh trunk = upload(*device, make_tree_trunk());
@@ -483,19 +553,28 @@ int main(int argc, char** argv) {
   auto frame_scene = [&]() {
     Scene all = scene;
     Mat4 at = translate(player.position) * rotate_y(player.facing);
-    all.props.push_back({&capsule, at, kPlayerColor, white, 0.0f, true});
-    // A small marker on the face shows which way the body is facing.
-    all.props.push_back({&box, at * translate({0.0f, body.height - 0.28f, -body.radius}) *
-                                   scale({0.16f, 0.1f, 0.14f}),
-                         kPlayerMarkerColor, white, 0.0f, true});
+    if (player_figure) player_figure->model = at;
+    for (const AnimatedFigure& f : figures) all.props.push_back({&f.mesh, f.model, f.color, white, 0.0f, true});
+    if (!player_figure) {
+      all.props.push_back({&capsule, at, kPlayerColor, white, 0.0f, true});
+      // A small marker on the face shows which way the body is facing.
+      all.props.push_back({&box, at * translate({0.0f, body.height - 0.28f, -body.radius}) *
+                                     scale({0.16f, 0.1f, 0.14f}),
+                           kPlayerMarkerColor, white, 0.0f, true});
+    }
     return all;
   };
 
   // Fixed-rate simulation (ARCHITECTURE.md section 4).
   const float sim_dt = 1.0f / 60.0f;
+  auto animate_player = [&](float dt) {
+    if (player_figure)
+      player_figure->animator.update(length(player.velocity), body.walk_speed, body.run_speed, dt);
+  };
   auto simulate = [&](Vec2 move_input, bool run) {
     MoveIntent intent{camera_relative(director.rig().yaw, move_input), run};
     step_character(player, body, region.terrain, obstacles, intent, sim_dt);
+    animate_player(sim_dt);
   };
 
   CameraRig override_rig;
@@ -509,12 +588,15 @@ int main(int argc, char** argv) {
     for (int i = 0; i < steps; ++i) {
       step_character(player, body, region.terrain, obstacles,
                      MoveIntent{camera_relative(start_yaw, opt.move), opt.run}, sim_dt);
+      animate_player(sim_dt);
+      animate_bystanders(sim_dt);
       director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
     }
     // Let the camera settle after walking, as a player standing still would see it.
     int settle = steps > 0 ? static_cast<int>(opt.settle_seconds / sim_dt) : 0;
     for (int i = 0; i < settle; ++i) {
       simulate({0, 0}, false);
+      animate_bystanders(sim_dt);
       director.update(player, region.terrain, region.camera_zones, {}, sim_dt);
     }
     if (steps > 0) {
@@ -538,6 +620,7 @@ int main(int argc, char** argv) {
     Scene frame = frame_scene();
     for (u32 i = 0; i < opt.frames; ++i) {
       if (!device->begin_frame()) continue;
+      upload_figures();
       render_frame(*device, pl, frame, use_override ? override_rig : director.rig(), time_of_day,
                    opt.walk_seconds + opt.settle_seconds);
       device->end_frame();
@@ -613,7 +696,9 @@ int main(int argc, char** argv) {
                  last_zone.empty() ? "" : (last_zone + ")").c_str());
       }
 
+      animate_bystanders(dt);
       if (!device->begin_frame()) continue;
+      upload_figures();
       seconds += dt;
       render_frame(*device, pl, frame_scene(), director.rig(), time_of_day, seconds);
       device->end_frame();

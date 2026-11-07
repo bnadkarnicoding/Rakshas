@@ -140,6 +140,55 @@ inline Mat4 perspective(float fovy_radians, float aspect, float near_z, float fa
   return r;
 }
 
+// Rotation as a unit quaternion (x, y, z, w), as stored in glTF files.
+struct Quat {
+  float x = 0, y = 0, z = 0, w = 1;
+};
+
+inline Quat operator*(Quat a, Quat b) {
+  return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+          a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+}
+
+inline Quat normalize(Quat q) {
+  float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  return len > 0 ? Quat{q.x / len, q.y / len, q.z / len, q.w / len} : Quat{};
+}
+
+inline Quat axis_angle(Vec3 axis, float angle) {
+  Vec3 a = normalize(axis);
+  float s = std::sin(angle * 0.5f);
+  return {a.x * s, a.y * s, a.z * s, std::cos(angle * 0.5f)};
+}
+
+// Blends two rotations along the shorter way round (normalised lerp: fast and
+// smooth enough for animation frames that are close together).
+inline Quat nlerp(Quat a, Quat b, float t) {
+  float d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+  if (d < 0) b = {-b.x, -b.y, -b.z, -b.w};
+  return normalize({a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t,
+                    a.w + (b.w - a.w) * t});
+}
+
+inline Mat4 rotation_matrix(Quat q) {
+  Mat4 r = Mat4::identity();
+  float xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
+  float xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z, wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+  r.at(0, 0) = 1 - 2 * (yy + zz);
+  r.at(0, 1) = 2 * (xy + wz);
+  r.at(0, 2) = 2 * (xz - wy);
+  r.at(1, 0) = 2 * (xy - wz);
+  r.at(1, 1) = 1 - 2 * (xx + zz);
+  r.at(1, 2) = 2 * (yz + wx);
+  r.at(2, 0) = 2 * (xz + wy);
+  r.at(2, 1) = 2 * (yz - wx);
+  r.at(2, 2) = 1 - 2 * (xx + yy);
+  return r;
+}
+
+// Translation * rotation * scale (the order glTF uses).
+inline Mat4 compose_trs(Vec3 t, Quat r, Vec3 s);
+
 // Orthographic projection for Vulkan (depth 0 at near, 1 at far, Y flipped),
 // for a right-handed view space looking down -Z. Used for sun/moon shadows.
 inline Mat4 orthographic(float left, float right, float bottom, float top, float near_z,
@@ -154,6 +203,8 @@ inline Mat4 orthographic(float left, float right, float bottom, float top, float
   r.at(3, 3) = 1.0f;
   return r;
 }
+
+inline Mat4 compose_trs(Vec3 t, Quat r, Vec3 s) { return translate(t) * rotation_matrix(r) * scale(s); }
 
 // General 4x4 inverse (cofactor expansion). Returns identity if singular.
 inline Mat4 inverse(const Mat4& a) {

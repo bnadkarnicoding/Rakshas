@@ -170,6 +170,8 @@ class VulkanDevice final : public Device {
   void begin_shadow_pass() override;
   u32 shadow_map_size() const override { return shadow_size_; }
   TextureHandle create_texture(const TextureDesc& desc) override;
+  BufferHandle create_dynamic_buffer(BufferUsage usage, size_t bytes) override;
+  void update_buffer(BufferHandle buffer, const void* data, size_t bytes) override;
   void bind_instance_buffer(BufferHandle buffer) override;
   void bind_texture(TextureHandle texture) override;
   void draw_indexed_instanced(u32 index_count, u32 instance_count) override;
@@ -230,7 +232,17 @@ class VulkanDevice final : public Device {
   i32 last_finished_frame_ = -1;
   bool frame_active_ = false;
 
-  std::vector<Buffer> buffers_{Buffer{}};          // index 0 = invalid handle
+  // A dynamic buffer keeps one copy per frame in flight, so the CPU can write
+  // this frame's data while the GPU may still be reading the previous frame's.
+  struct BufferSlot {
+    std::array<Buffer, kFramesInFlight> copies{};
+    bool dynamic = false;
+  };
+  std::vector<BufferSlot> buffers_{BufferSlot{}};  // index 0 = invalid handle
+  VkBuffer vk_buffer(BufferHandle h) const {
+    const BufferSlot& slot = buffers_[h.id];
+    return slot.copies[slot.dynamic ? frame_index_ : 0].buffer;
+  }
   std::vector<VkPipeline> pipelines_{VK_NULL_HANDLE};
 };
 
@@ -772,7 +784,9 @@ BufferHandle VulkanDevice::create_buffer(BufferUsage usage, const void* data, si
   Buffer b = make_buffer(bytes, flags,
                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
   if (data) std::memcpy(b.mapped, data, bytes);
-  buffers_.push_back(b);
+  BufferSlot slot;
+  slot.copies[0] = b;
+  buffers_.push_back(slot);
   return BufferHandle{static_cast<u32>(buffers_.size() - 1)};
 }
 
@@ -1018,12 +1032,13 @@ void VulkanDevice::push_constants(const void* data, u32 bytes) {
 void VulkanDevice::bind_vertex_buffer(BufferHandle buffer) {
   RK_ASSERT(buffer.valid() && buffer.id < buffers_.size());
   VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(frames_[frame_index_].cmd, 0, 1, &buffers_[buffer.id].buffer, &offset);
+  VkBuffer vb = vk_buffer(buffer);
+  vkCmdBindVertexBuffers(frames_[frame_index_].cmd, 0, 1, &vb, &offset);
 }
 
 void VulkanDevice::bind_index_buffer(BufferHandle buffer) {
   RK_ASSERT(buffer.valid() && buffer.id < buffers_.size());
-  vkCmdBindIndexBuffer(frames_[frame_index_].cmd, buffers_[buffer.id].buffer, 0,
+  vkCmdBindIndexBuffer(frames_[frame_index_].cmd, vk_buffer(buffer), 0,
                        VK_INDEX_TYPE_UINT32);
 }
 
@@ -1035,6 +1050,29 @@ void VulkanDevice::draw_indexed(u32 index_count) {
   vkCmdDrawIndexed(frames_[frame_index_].cmd, index_count, 1, 0, 0, 0);
 }
 
+BufferHandle VulkanDevice::create_dynamic_buffer(BufferUsage usage, size_t bytes) {
+  RK_ASSERT(bytes > 0);
+  VkBufferUsageFlags flags = usage == BufferUsage::Index32 ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+                                                           : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+  BufferSlot slot;
+  slot.dynamic = true;
+  for (Buffer& b : slot.copies) {
+    b = make_buffer(bytes, flags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    std::memset(b.mapped, 0, bytes);
+  }
+  buffers_.push_back(slot);
+  return BufferHandle{static_cast<u32>(buffers_.size() - 1)};
+}
+
+void VulkanDevice::update_buffer(BufferHandle buffer, const void* data, size_t bytes) {
+  RK_ASSERT(frame_active_ && buffer.valid() && buffer.id < buffers_.size());
+  BufferSlot& slot = buffers_[buffer.id];
+  RK_ASSERT(slot.dynamic);
+  Buffer& b = slot.copies[frame_index_];
+  RK_ASSERT(bytes <= b.size);
+  std::memcpy(b.mapped, data, bytes);
+}
+
 void VulkanDevice::draw_indexed_instanced(u32 index_count, u32 instance_count) {
   vkCmdDrawIndexed(frames_[frame_index_].cmd, index_count, instance_count, 0, 0, 0);
 }
@@ -1042,7 +1080,8 @@ void VulkanDevice::draw_indexed_instanced(u32 index_count, u32 instance_count) {
 void VulkanDevice::bind_instance_buffer(BufferHandle buffer) {
   RK_ASSERT(buffer.valid() && buffer.id < buffers_.size());
   VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(frames_[frame_index_].cmd, 1, 1, &buffers_[buffer.id].buffer, &offset);
+  VkBuffer ib = vk_buffer(buffer);
+  vkCmdBindVertexBuffers(frames_[frame_index_].cmd, 1, 1, &ib, &offset);
 }
 
 void VulkanDevice::bind_texture(TextureHandle texture) {
@@ -1293,7 +1332,8 @@ VulkanDevice::~VulkanDevice() {
   vkDeviceWaitIdle(device_);
   for (size_t i = 1; i < pipelines_.size(); ++i)
     if (pipelines_[i]) vkDestroyPipeline(device_, pipelines_[i], nullptr);
-  for (size_t i = 1; i < buffers_.size(); ++i) destroy_buffer(buffers_[i]);
+  for (size_t i = 1; i < buffers_.size(); ++i)
+    for (Buffer& b : buffers_[i].copies) destroy_buffer(b);
   for (size_t i = 1; i < textures_.size(); ++i) destroy_image(textures_[i].image);
   if (material_sampler_) vkDestroySampler(device_, material_sampler_, nullptr);
   if (material_pool_) vkDestroyDescriptorPool(device_, material_pool_, nullptr);

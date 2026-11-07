@@ -102,6 +102,7 @@ add_executable(rakshas
   game/camera_director.cpp
   game/model.cpp
   game/foliage.cpp
+  game/animation.cpp
   game/sky_model.cpp
   game/screenshot.cpp)
 target_include_directories(rakshas PRIVATE game third_party)
@@ -122,9 +123,9 @@ set_target_properties(rakshas PROPERTIES
 # ---------------------------------------------------------------------------
 if(RK_BUILD_TESTS)
   enable_testing()
-  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp tests/test_character.cpp tests/test_camera.cpp tests/test_model.cpp tests/test_foliage.cpp
+  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp tests/test_character.cpp tests/test_camera.cpp tests/test_model.cpp tests/test_foliage.cpp tests/test_animation.cpp
     game/sky_model.cpp game/shapes.cpp game/region.cpp game/character.cpp game/camera_director.cpp
-    game/model.cpp game/foliage.cpp)
+    game/model.cpp game/foliage.cpp game/animation.cpp)
   target_compile_definitions(rk_tests PRIVATE RK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   target_include_directories(rk_tests PRIVATE game tests third_party)
   target_link_libraries(rk_tests PRIVATE rk_core)

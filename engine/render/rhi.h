@@ -101,6 +101,10 @@ class Device {
   virtual const char* device_name() const = 0;
 
   virtual BufferHandle create_buffer(BufferUsage usage, const void* data, size_t bytes) = 0;
+  // A buffer rewritten every frame (e.g. animated characters). Call
+  // update_buffer after begin_frame, before drawing with it.
+  virtual BufferHandle create_dynamic_buffer(BufferUsage usage, size_t bytes) = 0;
+  virtual void update_buffer(BufferHandle buffer, const void* data, size_t bytes) = 0;
   virtual PipelineHandle create_pipeline(const PipelineDesc& desc) = 0;
   virtual TextureHandle create_texture(const TextureDesc& desc) = 0;
 
