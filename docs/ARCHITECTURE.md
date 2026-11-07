@@ -107,8 +107,7 @@ Whatever Avi or a designer will tune lives in **data files** that the engine loa
 
 Changing a riddle or moving a camera zone should never need a programmer.
 
-- **Format:** a human-readable text format.
-  - **Open decision:** we can write our own small parser, or adopt a JSON library, which would need approval under the library rule.
+- **Format (decided):** our own simple, human-readable text format and reader. It supports comments and multi-line text, uses no quotes or braces, and gives plain-language error messages. JSON may be added later for machine-generated files, with approval.
 - **Assets:** artists work in Blender and export **glTF**. Our converter (`tools/assetc`) turns glTF and images into fast binary files. The game only loads the binary files.
 
 ---
@@ -142,8 +141,8 @@ C++ allows memory bugs, so every build is checked automatically:
 
 | Rung | Visible result | Main modules |
 |---|---|---|
-| **1** | A window opens. A shape lit by a sun appears under a sky. Keyboard and gamepad move the view. | platform, core/math, render (RHI + Vulkan) |
-| 2 | Gray ground and sky. The sun moves through the day. | render, world |
+| **1** ✓ | A window opens. A shape lit by a sun appears under a sky. Keyboard and gamepad move the view. | platform, core/math, render (RHI + Vulkan) |
+| **2** ✓ | A gray-box landscape from a content file. Sun and moon shadows. A moon and stars. | core/data (content reader), region, render (shadow pass) |
 | 3 | A capsule walks and collides with walls | collision, input, world |
 | 4 | The hybrid camera: follows, pulls wide on a ridge, tightens for a duel | camera |
 | 5 | An animated mannequin | anim, asset converter |
@@ -178,5 +177,4 @@ rakshas/
 
 ## 10. Open items for Avi
 
-- **Data file format:** our own parser, or approve a JSON library?
 - **Engine name:** "Rakshas Engine" is a working title.

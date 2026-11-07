@@ -21,6 +21,15 @@ inline float smoothstepf(float e0, float e1, float x) {
   return t * t * (3.0f - 2.0f * t);
 }
 
+struct Vec2 {
+  float x = 0, y = 0;
+};
+inline Vec2 operator+(Vec2 a, Vec2 b) { return {a.x + b.x, a.y + b.y}; }
+inline Vec2 operator-(Vec2 a, Vec2 b) { return {a.x - b.x, a.y - b.y}; }
+inline Vec2 operator*(Vec2 a, float s) { return {a.x * s, a.y * s}; }
+inline float dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
+inline float length(Vec2 a) { return std::sqrt(dot(a, a)); }
+
 struct Vec3 {
   float x = 0, y = 0, z = 0;
 };
@@ -128,6 +137,21 @@ inline Mat4 perspective(float fovy_radians, float aspect, float near_z, float fa
   r.at(2, 2) = far_z / (near_z - far_z);
   r.at(2, 3) = -1.0f;
   r.at(3, 2) = (near_z * far_z) / (near_z - far_z);
+  return r;
+}
+
+// Orthographic projection for Vulkan (depth 0 at near, 1 at far, Y flipped),
+// for a right-handed view space looking down -Z. Used for sun/moon shadows.
+inline Mat4 orthographic(float left, float right, float bottom, float top, float near_z,
+                         float far_z) {
+  Mat4 r;
+  r.at(0, 0) = 2.0f / (right - left);
+  r.at(1, 1) = -2.0f / (top - bottom);
+  r.at(2, 2) = -1.0f / (far_z - near_z);
+  r.at(3, 0) = -(right + left) / (right - left);
+  r.at(3, 1) = (top + bottom) / (top - bottom);
+  r.at(3, 2) = -near_z / (far_z - near_z);
+  r.at(3, 3) = 1.0f;
   return r;
 }
 

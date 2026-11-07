@@ -8,15 +8,19 @@ namespace rk {
 struct SceneConstants {
   Mat4 view_proj;
   Mat4 inv_view_proj;
+  Mat4 light_view_proj;
   Vec4 camera_pos;
+  Vec4 light_dir;
+  Vec4 light_color;
   Vec4 sun_dir;
-  Vec4 sun_color;
+  Vec4 moon_dir;       // w: night amount
   Vec4 sky_zenith;
   Vec4 sky_horizon;
   Vec4 ground_color;
-  Vec4 params;  // x: haze density, y: exposure
+  Vec4 params;         // x: haze density, y: exposure
+  Vec4 shadow_params;  // x: 1 / shadow map size, y: normal offset, z: strength
 };
-static_assert(sizeof(SceneConstants) == 240, "SceneConstants must match common.glsl");
+static_assert(sizeof(SceneConstants) == 352, "SceneConstants must match common.glsl");
 
 // Per-object push constants for lit.vert / lit.frag.
 struct ObjectConstants {

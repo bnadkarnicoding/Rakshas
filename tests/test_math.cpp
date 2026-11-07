@@ -91,3 +91,14 @@ TEST(ground_faces_up) {
   const Vertex& c = g.vertices[g.indices[2]];
   CHECK(cross(b.position - a.position, c.position - a.position).y > 0.0f);
 }
+
+TEST(orthographic_vulkan_conventions) {
+  Mat4 o = orthographic(-10, 10, -5, 5, 1.0f, 101.0f);
+  Vec4 n = o * Vec4{0, 0, -1.0f, 1};
+  Vec4 f = o * Vec4{0, 0, -101.0f, 1};
+  CHECK_NEAR(n.z, 0.0f, 1e-6f);
+  CHECK_NEAR(f.z, 1.0f, 1e-6f);
+  Vec4 corner = o * Vec4{10, 5, -50, 1};
+  CHECK_NEAR(corner.x, 1.0f, 1e-6f);
+  CHECK_NEAR(corner.y, -1.0f, 1e-6f);  // Y flipped like perspective()
+}

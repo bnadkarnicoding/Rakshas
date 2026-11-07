@@ -5,10 +5,16 @@
 // Xbox backends later. Keep this interface small and boring: every operation
 // added here must be implemented by every live backend.
 //
-// Model for now (rung 1):
-//   * One frame = begin_frame -> begin_pass -> draws -> end_pass -> end_frame.
+// Model for now (rung 2):
+//   * One frame = begin_frame -> [begin_shadow_pass -> draws -> end_pass]
+//                 -> begin_pass -> draws -> end_pass -> end_frame.
 //   * Every pipeline sees the same per-frame "scene constants" block
 //     (GLSL: set 0, binding 0, std140) and up to 128 bytes of push constants.
+//   * The shadow pass renders depth from the sun/moon into the frame's shadow
+//     map, which main-pass shaders read at set 0, binding 1 (sampler2DShadow,
+//     white border = fully lit outside the map). If a frame skips the shadow
+//     pass, the map is cleared so nothing is shadowed. This is deliberately
+//     a single built-in shadow map; general render targets come later.
 //   * Rendering happens into an internal colour target (sRGB) + depth target.
 //     With a window it is copied to the screen; headless it can be read back.
 #pragma once
@@ -33,6 +39,8 @@ enum class BufferUsage { Vertex, Index32 };
 
 enum class AttribFormat { Float2, Float3, Float4 };
 
+enum class PassKind { Main, Shadow };
+
 struct VertexAttribute {
   u32 location = 0;
   AttribFormat format = AttribFormat::Float3;
@@ -41,8 +49,9 @@ struct VertexAttribute {
 
 struct PipelineDesc {
   const char* debug_name = "pipeline";
+  PassKind pass = PassKind::Main;            // Shadow = depth only, no fragment shader needed
   std::vector<u32> vertex_spirv;
-  std::vector<u32> fragment_spirv;
+  std::vector<u32> fragment_spirv;           // may be empty for shadow pipelines
   u32 vertex_stride = 0;                     // 0 = no vertex buffer
   std::vector<VertexAttribute> attributes;
   bool depth_test = true;
@@ -56,13 +65,14 @@ struct DeviceDesc {
   bool vsync = true;
   u32 width = 1280;                          // headless render size
   u32 height = 720;
+  u32 shadow_map_size = 2048;                // 1024 for the low preset
   // Window integration (ignored when headless):
   std::vector<const char*> instance_extensions;
   std::function<bool(void* instance, u64* out_surface)> create_surface;
   std::function<void(u32& width, u32& height)> drawable_size;
 };
 
-constexpr u32 kMaxSceneConstantsBytes = 256;
+constexpr u32 kMaxSceneConstantsBytes = 512;
 constexpr u32 kMaxPushConstantsBytes = 128;
 
 class Device {
@@ -78,6 +88,7 @@ class Device {
   virtual bool begin_frame() = 0;
   virtual void render_size(u32& width, u32& height) const = 0;
   virtual void set_scene_constants(const void* data, size_t bytes) = 0;
+  virtual void begin_shadow_pass() = 0;
   virtual void begin_pass(const float clear_rgba[4]) = 0;
   virtual void bind_pipeline(PipelineHandle pipeline) = 0;
   virtual void push_constants(const void* data, u32 bytes) = 0;
@@ -85,7 +96,7 @@ class Device {
   virtual void bind_index_buffer(BufferHandle buffer) = 0;
   virtual void draw(u32 vertex_count) = 0;
   virtual void draw_indexed(u32 index_count) = 0;
-  virtual void end_pass() = 0;
+  virtual void end_pass() = 0;               // ends either kind of pass
   virtual void end_frame() = 0;
 
   // Copies the most recently finished frame as tightly packed RGBA8 (sRGB).
@@ -95,6 +106,7 @@ class Device {
 
   // Number of errors reported by the validation layers so far.
   virtual u32 validation_error_count() const = 0;
+  virtual u32 shadow_map_size() const = 0;
 };
 
 // Backends ------------------------------------------------------------------

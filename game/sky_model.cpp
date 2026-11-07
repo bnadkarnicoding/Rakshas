@@ -22,11 +22,14 @@ SkyState evaluate_sky(float time_of_day) {
   Vec3 sun_col = lerp(Vec3{1.0f, 0.45f, 0.18f}, Vec3{1.0f, 0.93f, 0.82f}, smoothstepf(0.0f, 0.5f, elev));
   float moon_strength = smoothstepf(0.0f, 0.2f, -elev);
   Vec3 moon_col = Vec3{0.06f, 0.08f, 0.13f};
+  s.sun_dir = sun_dir;
+  s.moon_dir = normalize(Vec3{-sun_dir.x, -sun_dir.y, sun_dir.z});
+  s.night = 1.0f - smoothstepf(-0.18f, 0.0f, elev);
   if (elev >= 0.0f) {
     s.light_dir = sun_dir;
     s.light_color = sun_col * (2.2f * sun_strength);
   } else {
-    s.light_dir = normalize(Vec3{-sun_dir.x, -sun_dir.y, sun_dir.z});
+    s.light_dir = s.moon_dir;
     s.light_color = moon_col * moon_strength;
   }
 

@@ -1,0 +1,94 @@
+# Rung 2 gray-box region: the first rough shape of the Release 1 land.
+#
+# Units are metres. Positions are "x z": x runs east (+) to west (-),
+# z runs south (+) to north (-). The sun rises in the east.
+#
+# This is a placeholder layout to test the engine, not the final map.
+
+terrain
+  size: 600
+  resolution: 301
+  noise_height: 0.6
+  noise_scale: 18
+  seed: 7
+  color: 0.42 0.34 0.24
+
+  # The ridge players will climb to look over the valley (a "Vista" spot later).
+  ridge lookout_ridge
+    from: 30 -15
+    to: 70 -70
+    width: 16
+    height: 14
+
+  hill north_hill
+    center: -35 -55
+    radius: 38
+    height: 10
+
+  hill west_rise
+    center: -70 10
+    radius: 30
+    height: 6
+
+  # Flat ground where the village will stand.
+  clearing village
+    center: 0 0
+    radius: 16
+    blend: 12
+    height: 0
+
+# --- Placeholder objects -------------------------------------------------
+
+prop stone_block
+  position: 0 0
+  size: 1.5 1.5 1.5
+  yaw: 15
+  color: 0.55 0.50 0.45
+
+prop sandstone_pillar
+  position: -2.6 -1.6
+  size: 0.7 3.5 0.7
+  yaw: 20
+  color: 0.72 0.52 0.36
+
+prop low_step
+  position: 2.4 -0.9
+  size: 2.6 0.5 1.6
+  yaw: -10
+  color: 0.50 0.42 0.33
+
+prop hut_a
+  position: -8 -7
+  size: 3 2.4 3
+  yaw: 30
+  color: 0.62 0.55 0.44
+
+prop hut_b
+  position: 8 -6
+  size: 2.6 2.2 3.2
+  yaw: -20
+  color: 0.62 0.55 0.44
+
+prop ridge_marker
+  position: 42 -32
+  size: 1 4 1
+  color: 0.70 0.55 0.40
+
+prop hill_stone_1
+  position: -30 -50
+  size: 1.2 5 1.2
+  color: 0.70 0.55 0.40
+
+prop hill_stone_2
+  position: -38 -56
+  size: 1.2 6 1.2
+  yaw: 10
+  color: 0.70 0.55 0.40
+
+# --- Where the view starts -------------------------------------------------
+
+camera
+  target: 0 -4
+  distance: 24
+  yaw: 20
+  pitch: 16

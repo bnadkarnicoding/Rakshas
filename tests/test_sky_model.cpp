@@ -39,3 +39,10 @@ TEST(time_wraps_around) {
   CHECK_NEAR(a.sun_elevation, b.sun_elevation, 1e-4f);
   CHECK_NEAR(a.sun_elevation, c.sun_elevation, 1e-4f);
 }
+
+TEST(stars_only_at_night_and_moon_opposite_sun) {
+  CHECK(evaluate_sky(0.0f).night > 0.99f);
+  CHECK(evaluate_sky(0.5f).night < 0.01f);
+  SkyState s = evaluate_sky(0.4f);
+  CHECK(dot(s.sun_dir, s.moon_dir) < 0.0f);
+}

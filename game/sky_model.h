@@ -11,6 +11,9 @@ struct SkyState {
   Vec3 sky_zenith;
   Vec3 sky_horizon;
   Vec3 ground_bounce;
+  Vec3 sun_dir;                // toward the sun, even when it is below the horizon
+  Vec3 moon_dir;               // toward the moon (opposite side of the sky from the sun)
+  float night = 0.0f;          // 0 by day .. 1 in full night (stars)
   float sun_elevation = 0.0f;  // sine of the sun's angle above the horizon (-1..1)
 };
 

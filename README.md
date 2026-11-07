@@ -5,9 +5,25 @@ A story-and-exploration game set in a pristine, mythic world stretching from Ind
 - **Design rules:** `CorePrinciples.md`, kept in the Rakshas Studio project.
 - **Engine design:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-## Current state: rung 1
+## Current state: rung 2
 
-A window shows a gray-box scene under a natural sky, lit by a sun that moves through a full day, with a moonlit night. You can orbit the view with the keyboard or a gamepad.
+A gray-box landscape with hills, a ridge and a flat village clearing, loaded from a content file. The sun and moon cast soft shadows, and the night sky has a moon and stars. The view orbits with the keyboard or a gamepad.
+
+### Changing the land yourself
+
+The landscape and its placeholder objects live in a plain text file:
+
+```
+content/regions/rung2_forest_lake.rk
+```
+
+Open it in any text editor (Notepad works). You can:
+
+- change a number,
+- add a `hill`,
+- move a `prop`.
+
+Save, rebuild (`cmake --build --preset windows-release`), and run. If something in the file is wrong, the game tells you the line and suggests a fix, for example "did you mean 'position'?".
 
 | Control | Keyboard | Gamepad |
 |---|---|---|
@@ -55,6 +71,12 @@ cmake --build --preset linux-debug
 
   ```
   rakshas --headless --validate --time 0.3 --out shot.png
+  ```
+
+  Add `--low` to use the low graphics preset (smaller shadow map), or `--region <file>` for another region file:
+
+  ```
+  rakshas --low --region content/regions/rung2_forest_lake.rk
   ```
 
   The exit code is non-zero if any Vulkan validation error or engine error occurs.

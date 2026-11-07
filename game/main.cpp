@@ -1,5 +1,6 @@
-// game/main.cpp — Rung 1: a window, a sun-lit gray-box scene under a natural
-// sky, and an orbiting view driven by keyboard or gamepad.
+// game/main.cpp — Rung 2: a gray-box landscape loaded from a content file,
+// with sun and moon shadows, a moon and stars, and an orbiting view driven by
+// keyboard or gamepad.
 //
 // Windowed controls:
 //   A/D or Left/Right (left stick X) ... orbit the view
@@ -11,6 +12,8 @@
 //
 // Headless (used by automated tests and the cloud workspace):
 //   rakshas --headless --validate --time 0.3 --yaw 35 --out shot.png
+// Other options: --region <file.rk>  --low (low graphics preset)  --pitch <deg>
+//                --distance <m>  --width/--height <px>  --day-length <seconds>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -25,6 +28,7 @@
 #include "render/rhi.h"
 #include "scene_constants.h"
 #include "screenshot.h"
+#include "region.h"
 #include "shapes.h"
 #include "sky_model.h"
 
@@ -39,8 +43,11 @@ struct Options {
   u32 height = 720;
   u32 frames = 3;
   float time_of_day = 0.30f;
-  float yaw_degrees = 35.0f;
-  float distance = 11.0f;
+  float yaw_degrees = std::nanf("");    // NaN = use the region's camera start
+  float pitch_degrees = std::nanf("");
+  float distance = std::nanf("");
+  bool low_preset = false;
+  std::string region;
   float day_length_seconds = 180.0f;
   std::string out = "rakshas_shot.png";
 };
@@ -64,6 +71,9 @@ bool parse_args(int argc, char** argv, Options& o) {
     else if (a == "--time" && (v = next("--time"))) o.time_of_day = std::strtof(v, nullptr);
     else if (a == "--yaw" && (v = next("--yaw"))) o.yaw_degrees = std::strtof(v, nullptr);
     else if (a == "--distance" && (v = next("--distance"))) o.distance = std::strtof(v, nullptr);
+    else if (a == "--pitch" && (v = next("--pitch"))) o.pitch_degrees = std::strtof(v, nullptr);
+    else if (a == "--region" && (v = next("--region"))) o.region = v;
+    else if (a == "--low") o.low_preset = true;
     else if (a == "--day-length" && (v = next("--day-length"))) o.day_length_seconds = std::strtof(v, nullptr);
     else if (a == "--out" && (v = next("--out"))) o.out = v;
     else {
@@ -111,10 +121,6 @@ struct Prop {
   Vec3 color;
 };
 
-Mat4 place(Vec3 position, Vec3 size, float yaw_degrees = 0.0f) {
-  return translate(position) * rotate_y(radians(yaw_degrees)) * scale(size);
-}
-
 struct Camera {
   Vec3 target{0.0f, 1.0f, 0.0f};
   float yaw = 0.0f;       // radians
@@ -127,36 +133,53 @@ struct Camera {
   }
 };
 
-SceneConstants build_scene_constants(const Camera& cam, float aspect, float time_of_day) {
+// Shadow coverage: a square this many metres wide around the view target.
+constexpr float kShadowRadius = 60.0f;
+
+// Light-space matrix for sun/moon shadows, snapped to whole shadow-map texels
+// so shadow edges don't shimmer as the camera moves.
+Mat4 light_matrix(Vec3 light_dir, Vec3 center, u32 shadow_size) {
+  Vec3 up = std::fabs(light_dir.y) > 0.98f ? Vec3{0, 0, 1} : Vec3{0, 1, 0};
+  Mat4 view = look_at(center + light_dir * 150.0f, center, up);
+  Mat4 proj = orthographic(-kShadowRadius, kShadowRadius, -kShadowRadius, kShadowRadius, 1.0f, 320.0f);
+  Mat4 vp = proj * view;
+  Vec4 origin = vp * Vec4{0, 0, 0, 1};
+  float half = static_cast<float>(shadow_size) * 0.5f;
+  float dx = (std::round(origin.x * half) - origin.x * half) / half;
+  float dy = (std::round(origin.y * half) - origin.y * half) / half;
+  return translate({dx, dy, 0.0f}) * vp;
+}
+
+SceneConstants build_scene_constants(const Camera& cam, float aspect, float time_of_day,
+                                     u32 shadow_size) {
   SkyState sky = evaluate_sky(time_of_day);
   Mat4 view = look_at(cam.eye(), cam.target, Vec3{0, 1, 0});
-  Mat4 proj = perspective(radians(55.0f), aspect, 0.1f, 500.0f);
+  Mat4 proj = perspective(radians(55.0f), aspect, 0.1f, 600.0f);
   SceneConstants sc;
   sc.view_proj = proj * view;
   sc.inv_view_proj = inverse(sc.view_proj);
+  sc.light_view_proj = light_matrix(sky.light_dir, cam.target, shadow_size);
   sc.camera_pos = to_vec4(cam.eye(), 1.0f);
-  sc.sun_dir = to_vec4(sky.light_dir);
-  sc.sun_color = to_vec4(sky.light_color);
+  sc.light_dir = to_vec4(sky.light_dir);
+  sc.light_color = to_vec4(sky.light_color);
+  sc.sun_dir = to_vec4(sky.sun_dir);
+  sc.moon_dir = to_vec4(sky.moon_dir, sky.night);
   sc.sky_zenith = to_vec4(sky.sky_zenith);
   sc.sky_horizon = to_vec4(sky.sky_horizon);
   sc.ground_color = to_vec4(sky.ground_bounce);
   sc.params = Vec4{0.006f, 0.9f, 0.0f, 0.0f};
+  // Shadows soften as the light gets low and weak (dawn, dusk, moonlight).
+  float strength = clampf(0.35f + 0.65f * smoothstepf(0.0f, 0.15f, sky.light_dir.y), 0.0f, 1.0f);
+  sc.shadow_params = Vec4{1.0f / static_cast<float>(shadow_size),
+                          4.0f * kShadowRadius / static_cast<float>(shadow_size), strength, 0.0f};
   return sc;
 }
 
-void render_frame(rhi::Device& device, rhi::PipelineHandle sky, rhi::PipelineHandle lit,
-                  const std::vector<Prop>& props, const Camera& cam, float time_of_day) {
-  u32 w = 0, h = 0;
-  device.render_size(w, h);
-  float aspect = static_cast<float>(w) / static_cast<float>(h);
-  SceneConstants sc = build_scene_constants(cam, aspect, time_of_day);
-  device.set_scene_constants(&sc, sizeof(sc));
+struct Pipelines {
+  rhi::PipelineHandle sky, lit, shadow;
+};
 
-  const float clear[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-  device.begin_pass(clear);
-  device.bind_pipeline(sky);
-  device.draw(3);
-  device.bind_pipeline(lit);
+void draw_props(rhi::Device& device, const std::vector<Prop>& props) {
   for (const Prop& p : props) {
     ObjectConstants oc{p.model, to_vec4(p.color, 1.0f)};
     device.push_constants(&oc, sizeof(oc));
@@ -164,6 +187,27 @@ void render_frame(rhi::Device& device, rhi::PipelineHandle sky, rhi::PipelineHan
     device.bind_index_buffer(p.mesh->indices);
     device.draw_indexed(p.mesh->index_count);
   }
+}
+
+void render_frame(rhi::Device& device, const Pipelines& pl, const std::vector<Prop>& props,
+                  const Camera& cam, float time_of_day) {
+  u32 w = 0, h = 0;
+  device.render_size(w, h);
+  float aspect = static_cast<float>(w) / static_cast<float>(h);
+  SceneConstants sc = build_scene_constants(cam, aspect, time_of_day, device.shadow_map_size());
+  device.set_scene_constants(&sc, sizeof(sc));
+
+  device.begin_shadow_pass();
+  device.bind_pipeline(pl.shadow);
+  draw_props(device, props);
+  device.end_pass();
+
+  const float clear[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  device.begin_pass(clear);
+  device.bind_pipeline(pl.sky);
+  device.draw(3);
+  device.bind_pipeline(pl.lit);
+  draw_props(device, props);
   device.end_pass();
 }
 
@@ -171,9 +215,15 @@ bool load_pipeline(rhi::Device& device, const std::string& shader_dir, const cha
                    bool with_vertices, rhi::PipelineHandle& out) {
   rhi::PipelineDesc d;
   d.debug_name = name;
+  const bool shadow = std::strcmp(name, "shadow") == 0;
   if (!read_spirv(shader_dir + name + ".vert.spv", d.vertex_spirv)) return false;
-  if (!read_spirv(shader_dir + name + ".frag.spv", d.fragment_spirv)) return false;
-  if (with_vertices) {
+  if (!shadow && !read_spirv(shader_dir + name + ".frag.spv", d.fragment_spirv)) return false;
+  if (shadow) {
+    d.pass = rhi::PassKind::Shadow;
+    d.vertex_stride = sizeof(Vertex);
+    d.attributes = {{0, rhi::AttribFormat::Float3, 0}};
+    d.cull_back_faces = false;
+  } else if (with_vertices) {
     d.vertex_stride = sizeof(Vertex);
     d.attributes = {{0, rhi::AttribFormat::Float3, 0},
                     {1, rhi::AttribFormat::Float3, static_cast<u32>(sizeof(Vec3))}};
@@ -198,8 +248,9 @@ int main(int argc, char** argv) {
   desc.headless = opt.headless;
   desc.width = opt.width;
   desc.height = opt.height;
+  desc.shadow_map_size = opt.low_preset ? 1024 : 2048;
   if (!opt.headless) {
-    window = Window::create({"Rakshas — rung 1", opt.width, opt.height});
+    window = Window::create({"Rakshas — rung 2", opt.width, opt.height});
     if (!window) return 1;
     desc.instance_extensions = window->vulkan_instance_extensions();
     desc.create_surface = [&](void* instance, u64* surface) {
@@ -212,36 +263,42 @@ int main(int argc, char** argv) {
   if (!device) return 1;
 
   const std::string shader_dir = executable_dir() + "shaders/";
-  rhi::PipelineHandle sky_pipeline, lit_pipeline;
-  if (!load_pipeline(*device, shader_dir, "sky", false, sky_pipeline)) return 1;
-  if (!load_pipeline(*device, shader_dir, "lit", true, lit_pipeline)) return 1;
+  Pipelines pl;
+  if (!load_pipeline(*device, shader_dir, "sky", false, pl.sky)) return 1;
+  if (!load_pipeline(*device, shader_dir, "lit", true, pl.lit)) return 1;
+  if (!load_pipeline(*device, shader_dir, "shadow", true, pl.shadow)) return 1;
+
+  // The land and its placeholder objects come from a content file.
+  const std::string region_path =
+      opt.region.empty() ? executable_dir() + "content/regions/rung2_forest_lake.rk" : opt.region;
+  Region region;
+  data::Errors content_errors;
+  if (!load_region(region_path, region, content_errors)) {
+    log_error("could not load the region:\n%s", content_errors.joined().c_str());
+    return 1;
+  }
+  log_info("region %s: %zu props", region_path.c_str(), region.props.size());
 
   GpuMesh box = upload(*device, make_box());
-  GpuMesh ground = upload(*device, make_ground(400.0f));
-
-  // Rung 1 gray-box scene: a stone block, a sandstone pillar, a low step and a
-  // distant row of pillars to show haze and scale.
-  std::vector<Prop> props = {
-      {&ground, Mat4::identity(), {0.42f, 0.34f, 0.24f}},
-      {&box, place({0.0f, 0.75f, 0.0f}, {1.5f, 1.5f, 1.5f}, 15.0f), {0.55f, 0.50f, 0.45f}},
-      {&box, place({-2.6f, 1.75f, -1.6f}, {0.7f, 3.5f, 0.7f}, 20.0f), {0.72f, 0.52f, 0.36f}},
-      {&box, place({2.4f, 0.25f, -0.9f}, {2.6f, 0.5f, 1.6f}, -10.0f), {0.50f, 0.42f, 0.33f}},
-  };
-  for (int i = -3; i <= 3; ++i) {
-    float x = static_cast<float>(i) * 6.0f;
-    props.push_back({&box, place({x, 2.5f, -24.0f}, {1.0f, 5.0f, 1.0f}), {0.70f, 0.55f, 0.40f}});
-  }
+  GpuMesh terrain = upload(*device, build_terrain_mesh(region.terrain));
+  std::vector<Prop> props = {{&terrain, Mat4::identity(), region.terrain.color}};
+  for (const PropPlacement& p : region.props)
+    props.push_back({&box, prop_transform(region.terrain, p), p.color});
 
   Camera cam;
-  cam.yaw = radians(opt.yaw_degrees);
-  cam.distance = opt.distance;
+  const CameraStart& start = region.camera;
+  cam.target = {start.target.x, region.terrain.height_at(start.target.x, start.target.y) + 1.2f,
+                start.target.y};
+  cam.yaw = radians(std::isnan(opt.yaw_degrees) ? start.yaw : opt.yaw_degrees);
+  cam.pitch = radians(std::isnan(opt.pitch_degrees) ? start.pitch : opt.pitch_degrees);
+  cam.distance = std::isnan(opt.distance) ? start.distance : opt.distance;
   float time_of_day = opt.time_of_day;
   int exit_code = 0;
 
   if (opt.headless) {
     for (u32 i = 0; i < opt.frames; ++i) {
       if (!device->begin_frame()) continue;
-      render_frame(*device, sky_pipeline, lit_pipeline, props, cam, time_of_day);
+      render_frame(*device, pl, props, cam, time_of_day);
       device->end_frame();
     }
     std::vector<u8> pixels;
@@ -282,10 +339,10 @@ int main(int argc, char** argv) {
         }
       }
       cam.yaw += input.orbit * dt * 1.2f;
-      cam.distance = clampf(cam.distance * std::exp(input.zoom * dt * 1.2f), 4.0f, 40.0f);
+      cam.distance = clampf(cam.distance * std::exp(input.zoom * dt * 1.2f), 4.0f, 60.0f);
 
       if (!device->begin_frame()) continue;
-      render_frame(*device, sky_pipeline, lit_pipeline, props, cam, time_of_day);
+      render_frame(*device, pl, props, cam, time_of_day);
       device->end_frame();
 
       if (input.screenshot) {

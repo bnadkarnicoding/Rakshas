@@ -53,7 +53,8 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(rk_core STATIC
   engine/core/log.cpp
-  engine/core/file.cpp)
+  engine/core/file.cpp
+  engine/core/data.cpp)
 target_include_directories(rk_core PUBLIC engine)
 target_link_libraries(rk_core PUBLIC rk_settings)
 
@@ -70,7 +71,8 @@ target_link_libraries(rk_render PUBLIC rk_core PRIVATE Vulkan::Vulkan)
 # ---------------------------------------------------------------------------
 set(RK_SHADERS
   shaders/sky.vert shaders/sky.frag
-  shaders/lit.vert shaders/lit.frag)
+  shaders/lit.vert shaders/lit.frag
+  shaders/shadow.vert)
 set(RK_SHADER_OUT "${CMAKE_BINARY_DIR}/bin/shaders")
 set(RK_SPV_FILES "")
 foreach(src ${RK_SHADERS})
@@ -93,11 +95,17 @@ add_custom_target(rk_shaders ALL DEPENDS ${RK_SPV_FILES})
 add_executable(rakshas
   game/main.cpp
   game/shapes.cpp
+  game/region.cpp
   game/sky_model.cpp
   game/screenshot.cpp)
 target_include_directories(rakshas PRIVATE game third_party)
 target_link_libraries(rakshas PRIVATE rk_core rk_platform rk_render)
 add_dependencies(rakshas rk_shaders)
+# Content files are copied on every build, so edits always show up.
+add_custom_target(rk_content ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/content ${CMAKE_BINARY_DIR}/bin/content
+  COMMENT "Copying content files")
+add_dependencies(rakshas rk_content)
 set_target_properties(rakshas PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
   RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
@@ -108,8 +116,9 @@ set_target_properties(rakshas PROPERTIES
 # ---------------------------------------------------------------------------
 if(RK_BUILD_TESTS)
   enable_testing()
-  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp
-    game/sky_model.cpp game/shapes.cpp)
+  add_executable(rk_tests tests/test_main.cpp tests/test_math.cpp tests/test_sky_model.cpp tests/test_data.cpp tests/test_region.cpp
+    game/sky_model.cpp game/shapes.cpp game/region.cpp)
+  target_compile_definitions(rk_tests PRIVATE RK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   target_include_directories(rk_tests PRIVATE game tests)
   target_link_libraries(rk_tests PRIVATE rk_core)
   add_test(NAME unit_tests COMMAND rk_tests)
